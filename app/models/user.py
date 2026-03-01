@@ -17,3 +17,5 @@ class User(Base):
     anciente = Column(Integer , default = 0)
     laboratory_id = Column(Integer , ForeignKey("laboratories.id"))
     
+    laboratory = relationship("Laboratory", back_populates="users")
+    
