@@ -1,60 +1,53 @@
-from sqlalchemy import Column, Integer, Date, String, Enum, ForeignKey, Text, Boolean, Float, DateTime
+from sqlalchemy import Column, Integer, Date, String, Enum, ForeignKey, Text, Boolean, Float, DateTime 
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from uuid import uuid4 , UUID
+from uuid import uuid4
 from app.core.database import Base
-from models.enums import *
+from app.models.enums import *
 from datetime import datetime
 
 class Application(Base):
     __tablename__ = "applications"
     
-    id = Column(UUID, primary_key=True, index=True, default=uuid4)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    stage_type = Column(Enum(StageType), nullable=False)
+    stage_type = Column(Enum(StageType))
     status = Column(Enum(Status), default=Status.brouillon, nullable=False, index=True)
     
-    start_date = Column(Date, nullable=True, index=True)
-    end_date = Column(Date, nullable=True)
+    start_date = Column(Date, index=True)
+    end_date = Column(Date)
     
-    destination_country = Column(Enum(Countries), nullable=True)
-    destination_city = Column(String(100), nullable=True)
-    host_institution = Column(String(255), nullable=True)
+    destination_country = Column(Enum(Countries))
+    destination_city = Column(String(100))
+    host_institution = Column(String(255))
     
-    scientific_objective = Column(Text, nullable=True)
+    scientific_objective = Column(Text)
     
-    score = Column(Float, nullable=True)
-    #anything to add later
-#---------THIS SECTION WILL BE REVISED LATER--------------------------    
-#is_eligible = Column(Boolean, default=None, nullable=True)
-#eligibility_reason = Column(Text, nullable=True) 
+    score = Column(Float)
     
-    cs_decision = Column(Enum(CSDecision), nullable=True)
-    rejection_reason = Column(Text, nullable=True)
-#cs_decision_date = Column(Date, nullable=True)
-#cs_notes = Column(Text, nullable=True)
+    cs_decision = Column(Enum(CSDecision),default=CSDecision.en_attente, index=True)
+    rejection_reason = Column(Text)
     
-    stage_report_submitted = Column(Boolean, default=False)
-    stage_report_path = Column(String(500), nullable=True)
-    stage_report_submitted_at = Column(DateTime, nullable=True)
+    stage_report_submitted = Column(Boolean, default=False, nullable=False)
+    stage_report_path = Column(String(500))
+    stage_report_submitted_at = Column(DateTime)
     
-#zone = Column(Enum(GeographicZone), nullable=True)
-    calculated_fees = Column(Float, nullable=True)
-#---------------------------------------------------------------------   
+    calculated_fees = Column(Float)
     
-    attestation_generated = Column(Boolean, default=False)
-    attestation_path = Column(String(500), nullable=True)
-    attestation_generated_at = Column(DateTime, nullable=True)
+    attestation_generated = Column(Boolean, default=False, nullable=False)
+    attestation_path = Column(String(500))
+    attestation_generated_at = Column(DateTime)
     
-    cancellation_reason = Column(Text, nullable=True)
-    cancellation_requested_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    cancellation_reason = Column(Text)
+    cancellation_requested_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     
     created_at = Column(DateTime, nullable=False, default=datetime.today, index=True)
-    updated_at = Column(DateTime, nullable=True, onupdate=datetime.today)
-    submitted_at = Column(DateTime, nullable=True, index=True)
-    approved_at = Column(DateTime, nullable=True, index=True)
-    rejected_at = Column(DateTime, nullable=True, index=True)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    closed_at = Column(DateTime, nullable=True)
-    cancelled_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, onupdate=datetime.today)
+    submitted_at = Column(DateTime, index=True)
+    approved_at = Column(DateTime, index=True)
+    rejected_at = Column(DateTime, index=True)
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+    closed_at = Column(DateTime)
+    cancelled_at = Column(DateTime)

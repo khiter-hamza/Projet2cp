@@ -31,6 +31,7 @@ async def init_db():
     # Register all models here for Base.metadata.create_all
     from app.models.user import User
     from app.models.laboratory import Laboratory
+    from app.models.application import Application
     
     # This is typically handled by Alembic, but good for simple startup tests
     async with engine.begin() as conn:

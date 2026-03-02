@@ -1,5 +1,6 @@
 from passlib.context import CryptContext 
-from jose import jwt 
+from jose import jwt ,JWTError
+from fastapi import HTTPException
 
 
 pwd_context = CryptContext(schemes=["bcrypt"],deprecated="auto")
@@ -20,6 +21,9 @@ def create_token(user_id : int ) -> str :
 
 
 def decode_token(token : str) :
-    return jwt.decode(token=token, key=SECRET_KEY, algorithms=["HS256"])
-
+    try:
+        result = jwt.decode(token=token, key=SECRET_KEY, algorithms=["HS256"])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return result
 

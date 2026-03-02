@@ -30,8 +30,11 @@ class Status(str,enum.Enum):
     cloture = "cloture" 
     annule = "annule"
 
-class Countries(str,enum.Enum):
-    pass
+class Countries(str, enum.Enum):
+    algerie = "algerie"
+    france = "france"
+    allemagne = "allemagne"
+    tunisie = "tunisie"
 
 class StageType(str,enum.Enum):
     stage_perfectionnement = "stage_perfectionnement" 
@@ -40,3 +43,4 @@ class StageType(str,enum.Enum):
 class CSDecision(str,enum.Enum):
     approuve = "approuve"
     rejete = "rejete"
+    en_attente ="en_attente"
