@@ -26,7 +26,7 @@ class Application(Base):
     
     score = Column(Float)
     
-    cs_decision = Column(Enum(CSDecision),default=CSDecision.en_attente, index=True)
+    cs_decision = Column(Enum(CSDecision), default=CSDecision.en_attente, index=True)
     rejection_reason = Column(Text)
     
     stage_report_submitted = Column(Boolean, default=False, nullable=False)
@@ -51,3 +51,6 @@ class Application(Base):
     completed_at = Column(DateTime)
     closed_at = Column(DateTime)
     cancelled_at = Column(DateTime)
+
+    user = relationship("User", foreign_keys=[user_id], back_populates="applications")
+    cancellation_requested_by_user = relationship("User", foreign_keys=[cancellation_requested_by])

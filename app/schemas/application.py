@@ -34,3 +34,20 @@ class ApplicationUpsert(BaseModel):
     destination_country: Countries | None = None
     host_institution: str | None = Field(None, max_length=255)
     scientific_objective: str | None = None
+
+class ApplicationSubmission(BaseModel):
+    """Réponse complète"""
+    id: UUID
+    user_id: UUID
+    status: Status
+    stage_type: StageType 
+    start_date: datetime 
+    end_date: datetime 
+    destination_country: Countries 
+    destination_city: str 
+    host_institution: str 
+    scientific_objective: str 
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
