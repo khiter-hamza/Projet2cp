@@ -7,7 +7,7 @@ from app.core.config import settings
 # Create async engine
 engine = create_async_engine(
     settings.ASYNC_DATABASE_URI,
-    echo=True,  # Set to False in production
+    echo=False,  # Set to False in production
     pool_pre_ping=True,
 )
 
@@ -31,6 +31,7 @@ async def init_db():
     # Register all models here for Base.metadata.create_all
     from app.models.user import User
     from app.models.laboratory import Laboratory
+    from app.models.notification import Notification
     
     # This is typically handled by Alembic, but good for simple startup tests
     async with engine.begin() as conn:

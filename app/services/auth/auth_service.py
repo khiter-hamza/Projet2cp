@@ -4,6 +4,7 @@ from app.core.database import AsyncSessionLocal
 from app.models.user import User
 from app.core.security import hash_password , decode_token , create_token , verify_password
 import uuid
+import traceback
 from fastapi import HTTPException
 
 
@@ -23,10 +24,11 @@ async def register_user(user : CreateUser , db : AsyncSessionLocal) -> UserRespo
     await db.commit()
     await db.refresh(new_user)
     return UserResponse.model_validate(new_user)
-
+   
 
 
 async def login_user(user : UserLogin , db : AsyncSessionLocal ) :
+  try:
     result = await db.execute(select(User).where(User.email == user.email))
     userdb = result.scalar_one_or_none()
     if not userdb:
@@ -40,4 +42,6 @@ async def login_user(user : UserLogin , db : AsyncSessionLocal ) :
         "access_token": token,
         "token_type": "bearer"
     }
-    
+  except Exception as e:
+    logger.error(f"LOGIN ERROR: {traceback.format_exc()}")
+    raise    

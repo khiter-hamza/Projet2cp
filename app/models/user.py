@@ -18,4 +18,5 @@ class User(Base):
     laboratory_id = Column(Integer , ForeignKey("laboratories.id"))
     
     laboratory = relationship("Laboratory", back_populates="users")
+    notifications = relationship("Notification", back_populates="user")
     

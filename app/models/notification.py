@@ -18,7 +18,7 @@ class Notification(Base):
     notification_type = Column(Enum(NotificationType), nullable=False)
     is_read = Column(Boolean, default=False)
     read_at = Column(DateTime(timezone=True), nullable=True)
-    demande_id = Column(Integer, ForeignKey("demandes.id", ondelete="SET NULL"), nullable=True)
+    demande_id = Column(Integer, nullable=True)  # TODO: add ForeignKey("demandes.id", ondelete="SET NULL") when demandes table exists
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
 

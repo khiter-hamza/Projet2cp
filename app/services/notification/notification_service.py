@@ -2,8 +2,8 @@
 
 from sqlalchemy import select
 
-from Projet2cp.app.models.notification import Notification
-from Projet2cp.app.models.user import User
+from app.models.notification import Notification
+from app.models.user import User
 
 
 async def create_notification(db, user_id, title, message, notification_type, demande_id=None):

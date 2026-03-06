@@ -1,11 +1,34 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+import logging
+import traceback
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.api.v1.api import api_router
 from app.core.config import settings
 from app.core.database import init_db
 
+# Configure logging to show errors in terminal
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class ErrorLoggingMiddleware(BaseHTTPMiddleware):
+    """Catches ALL unhandled exceptions and prints the full traceback to the terminal."""
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await call_next(request)
+        except Exception as exc:
+            logger.error(f"\n{'='*60}")
+            logger.error(f"UNHANDLED EXCEPTION on {request.method} {request.url}")
+            logger.error(traceback.format_exc())
+            logger.error(f"{'='*60}\n")
+            return JSONResponse(
+                status_code=500,
+                content={"detail": str(exc)},
+            )
 
 
 @asynccontextmanager
@@ -23,6 +46,9 @@ app = FastAPI(
     version=settings.VERSION,
     lifespan=lifespan,
 )
+
+# Error logging middleware — must be added FIRST (outermost)
+app.add_middleware(ErrorLoggingMiddleware)
 
 # Set up CORS
 if settings.CORS_ORIGINS:

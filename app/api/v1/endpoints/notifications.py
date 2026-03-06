@@ -3,8 +3,9 @@ import uuid
 from fastapi import APIRouter , Depends , HTTPException
 from app.core.database import AsyncSessionLocal
 from app.core.database import get_db
-from app.models.user import User,Notification
-from app.schemas.user import CreateUser , UserResponse, UserUpdate
+from app.models.user import User
+from app.models.notification import Notification
+from app.schemas.user import UserResponse
 from app.schemas.notification import NotificationResponse, UnreadCountResponse
 from app.core.dependencies import get_current_user
 
