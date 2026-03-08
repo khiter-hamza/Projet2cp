@@ -24,3 +24,5 @@ async def notify_admins(db, title, message, notification_type, demande_id=None):
     )
     for admin in admins.scalars().all():
         await create_notification(db, admin.id, title, message, notification_type, demande_id)
+
+        

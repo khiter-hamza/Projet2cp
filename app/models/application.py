@@ -32,7 +32,8 @@ class Application(Base):
     stage_report_submitted_at = Column(DateTime)
     
     calculated_fees = Column(Float)
-    
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
+
     attestation_generated = Column(Boolean, default=False, nullable=False)
     attestation_path = Column(String(500))
     attestation_generated_at = Column(DateTime)
@@ -57,3 +58,4 @@ class Application(Base):
 )
     cancellation_requested_by_user = relationship("User", foreign_keys=[cancellation_requested_by])
     documents = relationship("Document", back_populates="application")
+    session = relationship("Session", back_populates="applications")

@@ -11,7 +11,7 @@ class CreateUser(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id : int
+    id : uuid.UUID
     username : str
     lastname : str
     email : str

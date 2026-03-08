@@ -124,7 +124,7 @@ async def downlods_demende_documents(application_id:uuid.UUID,db:AsyncSession=De
 
 @router.get('application/documents')
 async def downlaod_all_user_docs(db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
-   if   not user.role=='Admin-dpgr':
+   if    user.role.value != "admin_dpgr":
       raise HTTPException(status_code=401,detail='Unauthaurize')
    result = await db.execute(select(Document)
         .options(

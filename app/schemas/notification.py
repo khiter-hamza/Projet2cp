@@ -14,7 +14,7 @@ class NotificationResponse(BaseModel):
     notification_type: NotificationType
     is_read: bool
     read_at: Optional[datetime] = None
-    demande_id: Optional[int] = None
+    demande_id: Optional[uuid.UUID] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

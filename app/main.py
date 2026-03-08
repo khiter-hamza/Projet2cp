@@ -1,14 +1,19 @@
 from contextlib import asynccontextmanager
+import asyncio
 import logging
 import traceback
+from datetime import date
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from sqlalchemy import select, update
 
 from app.api.v1.api import api_router
 from app.core.config import settings
-from app.core.database import init_db
+from app.core.database import init_db, AsyncSessionLocal
+from app.models.session import Session
 
 # Configure logging to show errors in terminal
 logging.basicConfig(level=logging.INFO)
@@ -31,13 +36,33 @@ class ErrorLoggingMiddleware(BaseHTTPMiddleware):
             )
 
 
+async def close_expired_sessions():
+    """Background task: auto-close sessions whose end_date has passed."""
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                await db.execute(
+                    update(Session)
+                    .where(Session.is_open == True, Session.end_date < date.today())
+                    .values(is_open=False)
+                )
+                await db.commit()
+                logger.info("Checked for expired sessions")
+        except Exception:
+            logger.error(f"Error closing expired sessions: {traceback.format_exc()}")
+        await asyncio.sleep(10000)  # check every 3 hours
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Initialize things like DB connection pools
     print(f"Starting up {settings.PROJECT_NAME}...")
     await init_db()
+    # Start background task to auto-close expired sessions
+    task = asyncio.create_task(close_expired_sessions())
     yield
-    # Shutdown: Clean up resources
+    # Shutdown: Cancel background task and clean up
+    task.cancel()
     print(f"Shutting down {settings.PROJECT_NAME}...")
 
 
