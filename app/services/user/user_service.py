@@ -30,4 +30,3 @@ async def get_user(db : AsyncSessionLocal , user_id : int) -> UserResponse :
         return UserResponse.model_validate(user)
     return None
     
-    

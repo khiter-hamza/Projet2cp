@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Date, String, Enum, ForeignKey, Text, Boolean, Float, DateTime 
+from sqlalchemy import Column,  Date, String, Enum, ForeignKey, Text, Boolean, Float, DateTime ,BOOLEAN
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from uuid import uuid4
@@ -12,8 +12,8 @@ class Application(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     
-    stage_type = Column(Enum(StageType))
-    status = Column(Enum(Status), default=Status.brouillon, nullable=False, index=True)
+    stage_type = Column(Enum(StageType) ,nullable=False)
+    status = Column(Enum(Status), default=Status.DRAFT, nullable=False, index=True)
     
     start_date = Column(Date, index=True)
     end_date = Column(Date)
@@ -26,7 +26,8 @@ class Application(Base):
     
     score = Column(Float)
     
-    cs_decision = Column(Enum(CSDecision), default=CSDecision.en_attente, index=True)
+    #is_eligible = Column(Boolean,nullable=True,index=True)
+    cs_decision = Column(Enum(CSDecision), nullable=True, index=True)
     rejection_reason = Column(Text)
     
     stage_report_submitted = Column(Boolean, default=False, nullable=False)
@@ -43,7 +44,7 @@ class Application(Base):
     cancellation_requested_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     
     created_at = Column(DateTime, nullable=False, default=datetime.today, index=True)
-    updated_at = Column(DateTime, onupdate=datetime.today)
+#   updated_at = Column(DateTime, onupdate=datetime.today)
     submitted_at = Column(DateTime, index=True)
     approved_at = Column(DateTime, index=True)
     rejected_at = Column(DateTime, index=True)
