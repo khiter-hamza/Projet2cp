@@ -108,11 +108,11 @@ async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: Appl
         search_term = f"%{filters['search']}%"
         query = query.join(Application.user).where(
             or_(
+                User.username.ilike(search_term),
                 Application.scientific_objective.ilike(search_term),
                 Application.host_institution.ilike(search_term),
                 Application.destination_city.ilike(search_term),
-                Application.id.cast(String).ilike(search_term),
-                User.username.ilike(search_term)
+                Application.id.cast(String).ilike(search_term)
             )
         )
     
