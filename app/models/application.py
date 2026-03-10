@@ -1,11 +1,10 @@
-from sqlalchemy import Column,  Date, String, Enum, ForeignKey, Text, Boolean, Float, DateTime ,BOOLEAN
+from sqlalchemy import Column,  Date, String, Enum, ForeignKey, Text, Boolean, Float, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from uuid import uuid4
 from app.core.database import Base
 from app.models.enums import *
 from datetime import datetime
-
 class Application(Base):
     __tablename__ = "applications"
     
@@ -35,7 +34,8 @@ class Application(Base):
     stage_report_submitted_at = Column(DateTime)
     
     calculated_fees = Column(Float)
-    
+    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
+
     attestation_generated = Column(Boolean, default=False, nullable=False)
     attestation_path = Column(String(500))
     attestation_generated_at = Column(DateTime)
@@ -53,5 +53,11 @@ class Application(Base):
     closed_at = Column(DateTime)
     cancelled_at = Column(DateTime)
 
-    user = relationship("User", foreign_keys=[user_id], back_populates="applications")
+    user = relationship(
+    "User",
+    foreign_keys=[user_id],
+    back_populates="applications"
+)
     cancellation_requested_by_user = relationship("User", foreign_keys=[cancellation_requested_by])
+    documents = relationship("Document", back_populates="application")
+    session = relationship("Session", back_populates="applications")

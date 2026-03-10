@@ -16,8 +16,8 @@ def verify_password(plain_password , hashpassword) -> bool :
 SECRET_KEY="hamza"
 
 
-def create_token(user_id : int ) -> str :
-    return jwt.encode({"user_id": user_id} , key=SECRET_KEY)
+def create_token(user_id) -> str :
+    return jwt.encode({"user_id": str(user_id)} , key=SECRET_KEY)
 
 
 def decode_token(token : str) :

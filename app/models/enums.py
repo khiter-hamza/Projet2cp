@@ -25,6 +25,13 @@ class Status(str, enum.Enum):
     REJECTED = "rejected"
     CANCELLED = "cancelled"
 
+class NotificationType(str, enum.Enum):
+    status_change = "status_change"
+    cs_decision = "cs_decision"
+    reminder = "reminder"
+    deadline = "deadline"
+    system_update = "system_update"
+
 class Countries(str, enum.Enum):
     algerie = "algerie"
     france = "france"
@@ -38,3 +45,15 @@ class StageType(str,enum.Enum):
 class CSDecision(str,enum.Enum):
     approuve = "approuve"
     rejete = "rejete"
+    #en_attente ="en_attente"
+
+
+class Documents_type(str, enum.Enum):
+    invitation="invitation"
+    passport="passport"
+    cv="cv"
+    programme="programme"
+    accord_labo="accord_labo"
+    ordre_mission="ordre_mission"
+    report="report"
+    attestation="attestation"

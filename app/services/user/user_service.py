@@ -23,10 +23,11 @@ async def get_users(db : AsyncSessionLocal) -> list[UserResponse] :
     return [UserResponse.model_validate(u) for u in users]
 
 
-async def get_user(db : AsyncSessionLocal , user_id : int) -> UserResponse :
-    result = await db.execute(select(User).where(User.id == user_id))
+async def get_user(db : AsyncSessionLocal , user_id : str):
+    from uuid import UUID as _UUID
+    uid = _UUID(user_id) if isinstance(user_id, str) else user_id
+    result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
-    if user:
-        return UserResponse.model_validate(user)
+    return user
     return None
     

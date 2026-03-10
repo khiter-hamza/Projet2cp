@@ -1,4 +1,4 @@
-from fastapi import HTTPException, Response
+from fastapi import HTTPException, Response , Depends
 from uuid import UUID
 from datetime import datetime
 from pydantic import ValidationError
@@ -7,6 +7,7 @@ from app.core.database import AsyncSession
 from app.schemas.application import *
 from app.models.application import Application
 from app.models.user import User
+from app.models.session import Session
 from app.models.enums import *
 
 
@@ -187,3 +188,12 @@ async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     return Response(status_code=204)
+from app.core.database import AsyncSessionLocal, get_db
+from app.schemas.session import SessionResponse
+
+async def get_current_session(db: AsyncSessionLocal = Depends(get_db)):
+    result = await db.execute(
+        select(Session).where(Session.is_active == True, Session.end_date >= datetime.date.today())
+    )
+    session = result.scalar_one_or_none()
+    return session

@@ -26,7 +26,7 @@ async def register_user(user : CreateUser , db : AsyncSessionLocal) -> UserRespo
     await db.commit()
     await db.refresh(new_user)
     return UserResponse.model_validate(new_user)
-
+   
 
 
 async def login_user(user : UserLogin , db : AsyncSessionLocal ) :
