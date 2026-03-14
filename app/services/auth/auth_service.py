@@ -3,9 +3,12 @@ from app.schemas.user import CreateUser , UserResponse ,UserLogin
 from app.core.database import AsyncSessionLocal
 from app.models.user import User
 from app.core.security import hash_password , decode_token , create_token , verify_password
-import uuid
-from fastapi import HTTPException
+from uuid import UUID
+from typing import Annotated
+from fastapi import HTTPException , Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+security = HTTPBearer()
 
 async def register_user(user : CreateUser , db : AsyncSessionLocal) -> UserResponse :
     result = await db.execute(select(User).where(User.email == user.email))
@@ -35,9 +38,17 @@ async def login_user(user : UserLogin , db : AsyncSessionLocal ) :
     if not verify_password(user.password, userdb.hashed_password):
         raise HTTPException(status_code=400, detail="incorrect password")
     
-    token = create_token(userdb.id)
+    token = create_token(str(userdb.id))
     return {
         "access_token": token,
         "token_type": "bearer"
     }
-    
+
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> UUID:
+    try:
+        token = credentials.credentials
+        payload = decode_token(token)
+        return UUID(payload.get("user_id"))
+    except (ValueError, AttributeError):
+        raise HTTPException(status_code=401, detail="Invalid token")
