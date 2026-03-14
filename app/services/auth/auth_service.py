@@ -26,7 +26,7 @@ async def register_user(user : CreateUser , db : AsyncSessionLocal) -> UserRespo
     await db.commit()
     await db.refresh(new_user)
     return UserResponse.model_validate(new_user)
-
+   
 
 
 async def login_user(user : UserLogin , db : AsyncSessionLocal ) :
@@ -43,12 +43,4 @@ async def login_user(user : UserLogin , db : AsyncSessionLocal ) :
         "access_token": token,
         "token_type": "bearer"
     }
-
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> UUID:
-    try:
-        token = credentials.credentials
-        payload = decode_token(token)
-        return UUID(payload.get("user_id"))
-    except (ValueError, AttributeError):
-        raise HTTPException(status_code=401, detail="Invalid token")
+    

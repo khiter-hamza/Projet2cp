@@ -1,22 +1,23 @@
 #gestion des demandes
 from uuid import UUID
-from fastapi import APIRouter , Depends
+from fastapi import APIRouter , Depends , Query
 from typing import Annotated
 from app.core.database import AsyncSession
 from app.core.database import get_db
 from app.core.database import get_db
 from app.schemas.application import *
 from app.services.application.application_service import *
+from app.services.auth.auth_service import get_current_user
 
 router = APIRouter()
 
 @router.get("/{id}", response_model=ApplicationResponse)
-async def get_application_endpoint(id: UUID, db: Annotated[AsyncSession, Depends(get_db)]):
-    return await getApplication(id, db)
+async def get_User_application_endpoint(id: UUID, db: Annotated[AsyncSession, Depends(get_db)]):
+    return await getUserApplication(id, db)
 
 @router.get("/", response_model=list[ApplicationResponse])
-async def list_applications_endpoint(db: Annotated[AsyncSession, Depends(get_db)]):
-    return await listAllApplications(db)
+async def get_applications_endpoint(db: Annotated[AsyncSession, Depends(get_db)],user_id: Annotated[UUID, Depends(get_current_user)],appFilterQuery:Annotated[ApplicationFilterParams,Depends(get_filter_params)]):
+    return await listApplications(db,user_id,appFilterQuery)
 
 @router.post("/", response_model=ApplicationResponse)
 async def create_draft_endpoint(data: ApplicationUpsert, db: Annotated[AsyncSession, Depends(get_db)], user_id: Annotated[UUID, Depends(get_current_user)]):

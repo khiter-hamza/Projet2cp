@@ -15,20 +15,22 @@ class UserGrade(str, enum.Enum):
     doctorant_salarie = "doctorant_salarie"
     doctorant_non_salarie = "doctorant_non_salarie"
     
-class Status(str,enum.Enum):
-    brouillon ="brouillon" 
-    soumise ="soumise" 
-    verification ="verification"
-    preparation_cs = "preparation_cs"
-    deliberation_cs ="deliberation_cs"
-    approuve = "approuve"
-    rejete = "rejete"
-    en_attente = "en_attente"
-    termine = "termine"
-    demande_annulation = "demande_annulation"
-    deliberation_finale = "deliberation_finale"
-    cloture = "cloture" 
-    annule = "annule"
+class Status(str, enum.Enum):
+    DRAFT = "draft"
+    SUBMITTED = "submitted"
+    CS_PREPARATION = "cs_preparation"
+    APPROVED = "approved"
+    COMPLETED = "completed"
+    CLOSED = "closed"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"
+
+class NotificationType(str, enum.Enum):
+    status_change = "status_change"
+    cs_decision = "cs_decision"
+    reminder = "reminder"
+    deadline = "deadline"
+    system_update = "system_update"
 
 class Countries(str, enum.Enum):
     algerie = "algerie"
@@ -43,4 +45,15 @@ class StageType(str,enum.Enum):
 class CSDecision(str,enum.Enum):
     approuve = "approuve"
     rejete = "rejete"
-    en_attente ="en_attente"
+    #en_attente ="en_attente"
+
+
+class Documents_type(str, enum.Enum):
+    invitation="invitation"
+    passport="passport"
+    cv="cv"
+    programme="programme"
+    accord_labo="accord_labo"
+    ordre_mission="ordre_mission"
+    report="report"
+    attestation="attestation"
