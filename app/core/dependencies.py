@@ -5,7 +5,7 @@ from app.core.security import decode_token
 from app.services.user.user_service import get_user
 import jose.jwt
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/endpoints/auth/token")
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSessionLocal = Depends(get_db)):
     payload = decode_token(token) 
