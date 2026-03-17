@@ -12,6 +12,7 @@ class UserGrade(str, enum.Enum):
     professeur = "professeur"
     mca_a = "mca_a"
     mca_b = "mca_b"
+    enseignant_chercheur = "enseignant_chercheur"
     doctorant_salarie = "doctorant_salarie"
     doctorant_non_salarie = "doctorant_non_salarie"
     

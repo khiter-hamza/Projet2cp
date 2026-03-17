@@ -9,6 +9,7 @@ from app.models.application import Application
 from app.models.user import User
 from app.models.session import Session
 from app.models.enums import *
+from app.services.application.eligibility_service import perform_eligibility_check
 
 
 async def getUserApplication(app_id: UUID, db: AsyncSession):
@@ -163,7 +164,17 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    return {"message": "Application submitted successfully", "id": str(application.id)}
+    # Run automatic eligibility verification
+    try:
+        eligibility_result = await perform_eligibility_check(application.id, db)
+        return {
+            "message": "Application submitted successfully",
+            "id": str(application.id),
+            "eligibility_status": "eligible" if eligibility_result.is_eligible else "rejected",
+            "verification_errors": eligibility_result.errors if eligibility_result.errors else None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Eligibility check failed: {str(e)}")
 
 
 async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):

@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 from uuid import UUID
+from app.models.enums import UserRole, UserGrade
+
 
 
 class CreateUser(BaseModel):
@@ -7,6 +9,10 @@ class CreateUser(BaseModel):
     lastname : str
     email : str
     password : str
+    role : UserRole
+    grade : UserGrade
+    ancientee : int
+    laboratory_name : str
     
 
 

@@ -20,6 +20,9 @@ class ApplicationResponse(BaseModel):
     host_institution: str | None = None
     scientific_objective: str | None = None
     score: float | None = None
+    is_eligible: bool | None = None
+    verified_at: datetime | None = None
+    verification_errors: str | None = None
     cs_decision: CSDecision | None = None
     rejection_reason: str | None = None
     calculated_fees: float | None = None

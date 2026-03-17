@@ -17,7 +17,7 @@ class User(Base):
     role = Column(Enum(UserRole),  default = UserRole.chercheur)
     grade = Column(Enum(UserGrade),  default = UserGrade.doctorant_non_salarie)
     anciente = Column(Integer , default = 0)
-    laboratory_id = Column(UUID(as_uuid=True) , ForeignKey("laboratories.id"), nullable=True)
+    laboratory_id = Column(UUID(as_uuid=True) , ForeignKey("laboratories.id"), nullable=False)
     
     laboratory = relationship("Laboratory", back_populates="users")
     notifications = relationship("Notification", back_populates="user")
