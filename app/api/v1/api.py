@@ -4,9 +4,7 @@ from fastapi import APIRouter
 api_router = APIRouter()
 
 # Example router inclusion:
-<<<<<<< HEAD
-from app.api.v1.endpoints import users , auth , applications , documents,sessions
-=======
+from app.api.v1.endpoints import users , auth , applications , documents, sessions, cs
 from app.api.v1.endpoints import users , auth, notifications
 from app.api.v1.endpoints import sessions
 from app.api.v1.endpoints import documents
@@ -14,13 +12,13 @@ from app.api.v1.endpoints import applications
 from app.api.v1.endpoints import eligibility
 from app.api.v1.endpoints import evaluation
 from app.api.v1.endpoints import idemnity
+from app.api.v1.endpoints import cs
 
 
 @api_router.get("/health", tags=["health"])
 async def health_check():
     return {"status": "ok"}
 
->>>>>>> d9580816050b4690075088ffb2e27535030423e3
 
 api_router.include_router(users.router, prefix="/user", tags=["users"])
 
@@ -34,3 +32,5 @@ api_router.include_router(applications.router, prefix="/applications", tags=["ap
 api_router.include_router(eligibility.router, prefix="/applications", tags=["eligibility"])
 api_router.include_router(evaluation.router, prefix="/evaluation", tags=["scoring"])
 api_router.include_router(idemnity.app , prefix="/idemnity" , tags=["budjet and zones"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(cs.router, prefix="/cs", tags=["cs-operations"])

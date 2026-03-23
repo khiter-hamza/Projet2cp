@@ -10,24 +10,45 @@ from app.models.user import User
 from app.models.session import Session
 from app.models.enums import *
 from app.services.application.eligibility_service import perform_eligibility_check
+from app.core.database import AsyncSessionLocal, get_db
+from app.services.auth_service_utils import (
+    verify_chercheur_role,
+    verify_cs_admin_role,
+    verify_cs_admin_or_chercheur,
+    verify_ownership
+)
 
 
-async def getUserApplication(app_id: UUID, db: AsyncSession):
+async def getUserApplication(app_id: UUID, user_id: UUID, db: AsyncSession):
+    """
+    Get an application.
+    
+    Authorization:
+    - chercheur: Can only get own applications
+    - CS admin:  Can get any application
+    """
+    user = await verify_cs_admin_or_chercheur(user_id, db)
+    
     application = await db.get(Application, app_id)
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Chercheur can only see own applications
+    if user.role == UserRole.chercheur and application.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this application")
+    
     return ApplicationResponse.model_validate(application)
 
 
 async def createDraft(data: ApplicationUpsert, db: AsyncSession, user_id: UUID):
-    user = await db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    """
+    Create a new draft application.
     
-    if user.role != UserRole.chercheur:
-        raise HTTPException(status_code=403, detail="Not authorized to create applications")
+    Authorization: chercheur only
+    Restrictions: Max 1 draft per user at a time
+    """
+    user = await verify_chercheur_role(user_id, db)
     
-
     result = await db.execute(
         select(Application)
         .where(Application.user_id == user_id)
@@ -57,13 +78,20 @@ async def createDraft(data: ApplicationUpsert, db: AsyncSession, user_id: UUID):
 
 
 async def updateDraft(app_id: UUID, data: ApplicationUpsert, db: AsyncSession, user_id: UUID):
+    """
+    Update a draft application.
+    
+    Authorization: chercheur only (own application)
+    """
+    user = await verify_chercheur_role(user_id, db)
+    
     draft = await db.get(Application, app_id)
     
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     
-    if draft.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this application")
+    # Verify ownership
+    await verify_ownership(draft.user_id, user_id)
     
     if draft.status != Status.DRAFT:
         raise HTTPException(status_code=403, detail="Only drafts can be updated")
@@ -82,13 +110,29 @@ async def updateDraft(app_id: UUID, data: ApplicationUpsert, db: AsyncSession, u
 
 
 async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: ApplicationFilterParams ):
+    """
+    List applications.
+    
+    Authorization:
+    - chercheur: Can only list own applications
+    - CS admin:  Can list all applications
+    """
+    user = await verify_cs_admin_or_chercheur(user_id, db)
+    
     filters = appFilterQuery.model_dump()
     query = select(Application)
+    
+    # Chercheur can only see own applications
+    if user.role == UserRole.chercheur:
+        query = query.where(Application.user_id == user_id)
     
     if filters.get("status"):
         query = query.where(Application.status == filters["status"])    
     
     if filters.get("user_id"):
+        # CS admin can filter by user_id, chercheur cannot
+        if user.role == UserRole.chercheur:
+            raise HTTPException(status_code=403, detail="Cannot filter by other user_id")
         query = query.where(Application.user_id.cast(String) == filters["user_id"])
     
     if filters.get("stage_type"):
@@ -134,13 +178,21 @@ async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: Appl
 
 
 async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSession, user_id: UUID):
+    """
+    Submit a draft application for review.
+    
+    Authorization: chercheur only (own application)
+    Actions: Transitions DRAFT → SUBMITTED, runs eligibility check
+    """
+    user = await verify_chercheur_role(user_id, db)
+    
     application = await db.get(Application, app_id)
     
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     
-    if application.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    # Verify ownership
+    await verify_ownership(application.user_id, user_id)
     
     if application.status != Status.DRAFT:
         raise HTTPException(status_code=409, detail="Only drafts can be submitted")
@@ -178,6 +230,13 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
 
 
 async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
+    """
+    Delete a draft application.
+    
+    Authorization: chercheur only (own application)
+    """
+    user = await verify_chercheur_role(user_id, db)
+    
     result = await db.execute(
         select(Application)
         .where(Application.id == app_id)
@@ -199,8 +258,6 @@ async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     return Response(status_code=204)
-from app.core.database import AsyncSessionLocal, get_db
-from app.schemas.session import SessionResponse
 
 async def get_current_session(db: AsyncSessionLocal = Depends(get_db)):
     result = await db.execute(

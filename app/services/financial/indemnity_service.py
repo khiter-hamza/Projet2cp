@@ -6,6 +6,12 @@ from app.core.database import AsyncSessionLocal
 from sqlalchemy import select, func
 from datetime import datetime, timedelta
 from app.schemas.indemnity import *
+from uuid import UUID
+from app.services.auth_service_utils import (
+    verify_cs_admin_role,
+    verify_super_admin_role,
+    verify_cs_admin_or_chercheur
+)
 
 
 async def calculate_budjet(idemnity: Idemnity, db: AsyncSessionLocal):
@@ -62,7 +68,13 @@ async def calculate_budjet(idemnity: Idemnity, db: AsyncSessionLocal):
     return budjet 
 
 
-async def create_idemnity(idemnity : CreateIdemnity , db : AsyncSessionLocal ) -> IdemnityResonse:
+async def create_idemnity(idemnity : CreateIdemnity, user_id: UUID, db : AsyncSessionLocal ) -> IdemnityResonse:
+    """
+    Create a new indemnity record.
+    
+    Authorization: CS admin only (admin_dpgr or asistant_dpgr)
+    """
+    user = await verify_cs_admin_role(user_id, db)
    
     zone_result = await db.execute(select(Zone).where(Zone.name == idemnity.zone_name))
     zone = zone_result.scalar_one_or_none()
@@ -84,8 +96,14 @@ async def create_idemnity(idemnity : CreateIdemnity , db : AsyncSessionLocal ) -
     return IdemnityResonse.model_validate(new_idemnity)
 
 
-async def delete_idemnity(idemnity_id: str, db: AsyncSessionLocal) -> bool:
-    """Delete an indemnity by ID"""
+async def delete_idemnity(idemnity_id: str, user_id: UUID, db: AsyncSessionLocal) -> bool:
+    """
+    Delete an indemnity by ID.
+    
+    Authorization: super_admin only
+    """
+    user = await verify_super_admin_role(user_id, db)
+    
     result = await db.execute(select(Idemnity).where(Idemnity.id == idemnity_id))
     idemnity = result.scalar_one_or_none()
     
@@ -99,7 +117,14 @@ async def delete_idemnity(idemnity_id: str, db: AsyncSessionLocal) -> bool:
 
 
 
-async def create_zone(zone : CreateZone , db : AsyncSessionLocal):
+async def create_zone(zone : CreateZone, user_id: UUID, db : AsyncSessionLocal):
+    """
+    Create a new zone.
+    
+    Authorization: super_admin only
+    """
+    user = await verify_super_admin_role(user_id, db)
+    
     new_zone = Zone(name = zone.name , type = zone.type)
     db.add(new_zone)
     await db.commit()
@@ -109,13 +134,27 @@ async def create_zone(zone : CreateZone , db : AsyncSessionLocal):
 
 
 
-async def get_zones(db : AsyncSessionLocal):
+async def get_zones(user_id: UUID, db : AsyncSessionLocal):
+    """
+    Get all zones.
+    
+    Authorization: chercheur + CS admin (anyone viewing applications)
+    """
+    user = await verify_cs_admin_or_chercheur(user_id, db)
+    
     result = await db.execute(select(Zone))
     zones = result.scalars().all()
     return [ZoneResponse.model_validate(u) for u in zones ]
     
     
-async def delete_zone(zone_id : str ,  db : AsyncSessionLocal ):
+async def delete_zone(zone_id : str, user_id: UUID, db : AsyncSessionLocal ):
+    """
+    Delete a zone.
+    
+    Authorization: super_admin only
+    """
+    user = await verify_super_admin_role(user_id, db)
+    
     result = await db.execute(select(Zone).where(Zone.id == zone_id))
     zone = result.scalar_one_or_none()
     if not  zone :
