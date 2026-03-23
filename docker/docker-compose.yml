@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: projet2cp_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-projet2cp}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: projet2cp_backend
+    restart: always
+    env_file:
+      - ../.env
+    environment:
+      - POSTGRES_SERVER=db
+    ports:
+      - "8000:8000"
+    volumes:
+      - ..:/app
+
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
