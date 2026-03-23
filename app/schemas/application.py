@@ -2,8 +2,9 @@ from pydantic import BaseModel , Field
 from uuid import UUID
 from app.models.enums import *
 from datetime import date , datetime
-from typing import Literal
+from typing import Literal, List
 from fastapi import Query
+from app.schemas.document import DocumentResponse
 
 #all models has a relation with application
 
@@ -28,6 +29,7 @@ class ApplicationResponse(BaseModel):
     calculated_fees: float | None = None
     created_at: datetime
     submitted_at: datetime | None = None
+    documents: List[DocumentResponse] = []
     
     class Config:
         from_attributes = True
@@ -75,17 +77,21 @@ class ApplicationFilterParams(BaseModel):
         "cs_decision",
         "zone",
         "user_grade",
-        "duration_days"
+        "duration_days",
+        "session_id"
     ] = "submitted_at"
     sort_order: Literal["asc", "desc"] = "desc"
     
     # Filters
     status: Status | None = None
     user_id: str | None = None
+    session_id: str | None = None
     stage_type: StageType | None = None
     destination_country: Countries | None = None
     cs_decision: CSDecision | None = None
-    #is_eligible: bool | None = None
+    is_eligible: bool | None = None
+    zone_id: str | None = None
+    user_grade: UserGrade | None = None
     # Date Range
     start_date_from: date | None = None
     start_date_to: date | None = None
@@ -102,15 +108,22 @@ def get_filter_params(
         "stage_type",
         "destination_country",
         "host_institution",
-        "cs_decision"
+        "cs_decision",
+        "zone",
+        "user_grade",
+        "duration_days",
+        "session_id"
     ] = Query("created_at"),
     sort_order: Literal["asc", "desc"] = Query("desc"),
     status: Status | None = Query(None),
     user_id: str | None = Query(None),
+    session_id: str | None = Query(None),
     stage_type: StageType | None = Query(None),
     destination_country: Countries | None = Query(None),
     cs_decision: CSDecision | None = Query(None),
-    #is_eligible: bool | None = Query(None),
+    is_eligible: bool | None = Query(None),
+    zone_id: str | None = Query(None),
+    user_grade: UserGrade | None = Query(None),
     start_date_from: date | None = Query(None),
     start_date_to: date | None = Query(None),
     search: str | None = Query(None),
@@ -120,10 +133,13 @@ def get_filter_params(
         sort_order=sort_order,
         status=status,
         user_id=user_id,
+        session_id=session_id,
         stage_type=stage_type,
         destination_country=destination_country,
         cs_decision=cs_decision,
-        #is_eligible=is_eligible,
+        is_eligible=is_eligible,
+        zone_id=zone_id,
+        user_grade=user_grade,
         start_date_from=start_date_from,
         start_date_to=start_date_to,
         search=search,

@@ -4,7 +4,7 @@ from fastapi import APIRouter
 api_router = APIRouter()
 
 # Example router inclusion:
-from app.api.v1.endpoints import users , auth , applications , documents, sessions, cs
+from app.api.v1.endpoints import users , auth , applications , documents, sessions, cs, notifications, dashboard
 from app.api.v1.endpoints import users , auth, notifications
 from app.api.v1.endpoints import sessions
 from app.api.v1.endpoints import documents
@@ -13,6 +13,7 @@ from app.api.v1.endpoints import eligibility
 from app.api.v1.endpoints import evaluation
 from app.api.v1.endpoints import idemnity
 from app.api.v1.endpoints import cs
+from app.api.v1.endpoints import dashboard
 
 
 @api_router.get("/health", tags=["health"])
@@ -34,3 +35,4 @@ api_router.include_router(evaluation.router, prefix="/evaluation", tags=["scorin
 api_router.include_router(idemnity.app , prefix="/idemnity" , tags=["budjet and zones"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(cs.router, prefix="/cs", tags=["cs-operations"])
+api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
