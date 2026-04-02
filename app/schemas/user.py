@@ -11,8 +11,8 @@ class CreateUser(BaseModel):
     password : str
     role : UserRole
     grade : UserGrade
-    ancientee : int
-    laboratory_name : str
+    anciente : int
+    
     
 
 

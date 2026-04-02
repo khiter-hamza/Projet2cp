@@ -50,6 +50,13 @@ async def upload_document(    application_id: uuid.UUID,    document_type: Docum
     db.add(new_document)
     await db.commit()
     await db.refresh(new_document)
+    if document_type == Documents_type.report:# this set the stage_report_submitted to true and set the stage_report_id to the new document id and set the stage_report_submitted_at to the current date and time this is for the front end to know that the report is submitted and it can show the download button for the report and it can also show the date of submission of the report
+       app=await db.get(Application,application_id)
+       app.stage_report_submitted = True
+       app.stage_report_submitted_at = new_document.uploaded_at
+       app.stage_report_id = new_document.id
+       await db.commit()
+
     return new_document
 
 
@@ -70,6 +77,18 @@ async def delete_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:Use
    document=res.scalar_one_or_none()
    if not document:
       raise HTTPException(status_code=404,detail='documment not found')
+   if document.document_type == Documents_type.report:# this set the stage_report_submitted to true and set the stage_report_id to the new document id and set the stage_report_submitted_at to the current date and time this is for the front end to know that the report is submitted and it can show the download button for the report and it can also show the date of submission of the report
+       app=await db.get(Application,document.application_id)
+       app.stage_report_submitted = False
+       app.stage_report_id = None
+       app.stage_report_submitted_at = None
+       await db.commit()
+   if document.document_type == Documents_type.attestation:# this set the attestation_submitted to true and set the attestation_id to the new document id and set the attestation_submitted_at to the current date and time this is for the front end to know that the attestation is submitted and it can show the download button for the attestation and it can also show the date of submission of the attestation
+       app=await db.get(Application,document.application_id)
+       app.attestation_submitted = False
+       app.attestation_id = None
+       app.attestation_submitted_at = None
+       await db.commit()    
    await db.delete(document)
    await db.commit()
    return  {"details":"Document deleted succussfuly"} 
@@ -101,7 +120,7 @@ async def download_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:U
 async def downlods_demende_documents(application_id:uuid.UUID,db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
    try:
        res=await db.execute(select(Document).options(
-        joinedload(Document.application).joinedload(Application.user)
+        joinedload(Document.application).joinedload(Application.user)#retrive the user of the application to get the username and lastname for the zip file name un chapeux a vous
     ).where(Document.application_id==application_id ,Document.user_id==user.id).order_by(Document.uploaded_at.desc()))
        documents=res.scalars().all()
        if not documents:

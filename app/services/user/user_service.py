@@ -10,7 +10,7 @@ from uuid import UUID
 
 async def create_user(user : CreateUser , db : AsyncSessionLocal) -> UserResponse :
     hashed_pwd = hash_password(user.password)
-    new_user = User(email=user.email , hashed_password= hashed_pwd , username=user.username , lastname=user.lastname , role = user.role ,grade = user.grade , ancientee = user.ancientee ) 
+    new_user = User(email=user.email , hashed_password= hashed_pwd , username=user.username , lastname=user.lastname , role = user.role ,grade = user.grade , anciente = user.anciente ) 
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)

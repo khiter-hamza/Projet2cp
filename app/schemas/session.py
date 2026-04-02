@@ -18,6 +18,7 @@ class UpdateSession(BaseModel):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     is_open: Optional[bool] = None
+    is_active: Optional[bool] = None
 
 
 class SessionResponse(BaseModel):
@@ -27,6 +28,7 @@ class SessionResponse(BaseModel):
     start_date: date
     end_date: date
     is_open: bool
+    is_active: bool
     created_by: Optional[uuid.UUID] = None
     created_at: datetime
 

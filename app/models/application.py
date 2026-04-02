@@ -31,21 +31,23 @@ class Application(Base):
     
     cs_decision = Column(Enum(CSDecision), nullable=True, index=True)
     rejection_reason = Column(Text)
-    
+    #this for report and attestation,it just help the front end and it change during api call or at the generation of the attestation in the cs decision
+    stage_report_id=Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
     stage_report_submitted = Column(Boolean, default=False, nullable=False)
-    stage_report_path = Column(String(500))
-    stage_report_submitted_at = Column(DateTime)
-    
+    stage_report_submitted_at = Column(DateTime, nullable=True)
+    attestation_id=Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
+    attestation_submitted = Column(Boolean, default=False, nullable=False)
+    attestation_submitted_at = Column(DateTime, nullable=True)
+    #
+
     calculated_fees = Column(Float)
     session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
 
-    attestation_generated = Column(Boolean, default=False, nullable=False)
-    attestation_path = Column(String(500))
-    attestation_generated_at = Column(DateTime)
+    
     
     cancellation_reason = Column(Text)
     cancellation_requested_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
-    
+
     created_at = Column(DateTime, nullable=False, default=datetime.today, index=True)
 #   updated_at = Column(DateTime, onupdate=datetime.today)
     submitted_at = Column(DateTime, index=True)
@@ -55,7 +57,6 @@ class Application(Base):
     completed_at = Column(DateTime)
     closed_at = Column(DateTime)
     cancelled_at = Column(DateTime)
-
     user = relationship(
     "User",
     foreign_keys=[user_id],

@@ -14,8 +14,4 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     if not user:
         raise HTTPException(status_code=401, detail="User not found") 
     return user
-    user_id = payload.get("user_id") 
-    user = await get_user(db , user_id)
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found") 
-    return user
+   

@@ -11,5 +11,4 @@ class Zone(Base) :
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
     type = Column(Integer , nullable=False)
     name = Column(Integer , nullable=False)
-    
-    idemnities = relationship("Idemnity",back_populates="idemnities")
+    idemnities = relationship("Idemnity",back_populates="zone",cascade="all, delete-orphan")
