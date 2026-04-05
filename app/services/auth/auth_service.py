@@ -2,6 +2,7 @@ from sqlalchemy import select
 from app.schemas.user import CreateUser , UserResponse ,UserLogin
 from app.core.database import AsyncSessionLocal
 from app.models.user import User
+from app.models.laboratory import Laboratory
 from app.core.security import hash_password , decode_token , create_token , verify_password
 from uuid import UUID
 from typing import Annotated
@@ -16,11 +17,24 @@ async def register_user(user : CreateUser , db : AsyncSessionLocal) -> UserRespo
     if existing_user:
         raise HTTPException(status_code=400, detail="email already exists")
     hashed_pwd = hash_password(user.password)
+    # Resolve laboratory by name or create it
+    result = await db.execute(select(Laboratory).where(Laboratory.name == user.laboratory_name))
+    lab = result.scalar_one_or_none()
+    if not lab:
+        lab = Laboratory(name=user.laboratory_name)
+        db.add(lab)
+        await db.flush()
+
     new_user = User(
-        email=user.email, 
-        hashed_password=hashed_pwd, 
-        username=user.username, 
-        lastname=user.lastname
+        email=user.email,
+        hashed_password=hashed_pwd,
+        username=user.username,
+        lastname=user.lastname,
+        role=user.role if hasattr(user, 'role') else None,
+        grade=user.grade if hasattr(user, 'grade') else None,
+        # DB column is 'anciente' — populate it from schema's 'ancientee'
+        anciente=user.ancientee if hasattr(user, 'ancientee') else 0,
+        laboratory_id=lab.id,
     )
     db.add(new_user)
     await db.commit()

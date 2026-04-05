@@ -16,6 +16,7 @@ class User(Base):
     hashed_password = Column(String , nullable = False)
     role = Column(Enum(UserRole),  default = UserRole.chercheur)
     grade = Column(Enum(UserGrade),  default = UserGrade.doctorant_non_salarie)
+    # keep the column name that exists in the DB ('anciente')
     anciente = Column(Integer , default = 0)
     laboratory_id = Column(UUID(as_uuid=True) , ForeignKey("laboratories.id"), nullable=False)
     

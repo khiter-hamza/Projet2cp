@@ -2,6 +2,7 @@ from sqlalchemy import select
 from app.schemas.user import CreateUser , UserResponse 
 from app.core.database import AsyncSessionLocal
 from app.models.user import User
+from app.models.laboratory import Laboratory
 from app.core.security import hash_password
 import uuid
 from uuid import UUID
@@ -10,7 +11,28 @@ from uuid import UUID
 
 async def create_user(user : CreateUser , db : AsyncSessionLocal) -> UserResponse :
     hashed_pwd = hash_password(user.password)
-    new_user = User(email=user.email , hashed_password= hashed_pwd , username=user.username , lastname=user.lastname , role = user.role ,grade = user.grade , ancientee = user.ancientee ) 
+
+    # Resolve laboratory: find by name or create it
+    result = await db.execute(select(Laboratory).where(Laboratory.name == user.laboratory_name))
+    lab = result.scalar_one_or_none()
+    if not lab:
+        lab = Laboratory(name=user.laboratory_name)
+        db.add(lab)
+        # flush to populate lab.id without committing
+        await db.flush()
+
+    new_user = User(
+        email=user.email,
+        hashed_password=hashed_pwd,
+        username=user.username,
+        lastname=user.lastname,
+        role=user.role,
+        grade=user.grade,
+        # model uses 'anciente' column in DB; schema field is 'ancientee'
+        anciente=user.ancientee,
+        laboratory_id=lab.id,
+    )
+
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)

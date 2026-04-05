@@ -9,7 +9,9 @@ from app.core.database import Base
 class Zone(Base) :
     __tablename__ = "zones"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4, index=True)
-    type = Column(Integer , nullable=False)
-    name = Column(Integer , nullable=False)
+    type = Column(Integer, nullable=False)
+    # use String for zone name
+    name = Column(String(100), nullable=False)
     
-    idemnities = relationship("Idemnity",back_populates="idemnities")
+   
+    idemnities = relationship("Idemnity", back_populates="zone")

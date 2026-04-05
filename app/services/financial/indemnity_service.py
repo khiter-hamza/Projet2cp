@@ -69,8 +69,9 @@ async def create_idemnity(idemnity : CreateIdemnity , db : AsyncSessionLocal ) -
     
     if not zone:
         raise ValueError("Zone not found")
-    
-    new_idemnity = Idemnity(date = idemnity.date , zone_id = zone.id) 
+    # Create model using the schema field 'idemnity_date'
+    # (schema uses 'idemnity_date' while model column is 'date')
+    new_idemnity = Idemnity(date = idemnity.idemnity_date, zone_id = zone.id)
     db.add(new_idemnity)
     await db.commit()
     await db.refresh(new_idemnity)
@@ -81,7 +82,15 @@ async def create_idemnity(idemnity : CreateIdemnity , db : AsyncSessionLocal ) -
     await db.commit()
     await db.refresh(new_idemnity)
     
-    return IdemnityResonse.model_validate(new_idemnity)
+    # Build response dict so Pydantic can map model attributes to schema field names
+    resp = {
+        "id": new_idemnity.id,
+        "idemnity_date": new_idemnity.date,
+        "zone_id": new_idemnity.zone_id,
+        "budjet": new_idemnity.budjet,
+    }
+
+    return IdemnityResonse.model_validate(resp)
 
 
 async def delete_idemnity(idemnity_id: str, db: AsyncSessionLocal) -> bool:

@@ -1,7 +1,8 @@
-from fastapi import APIRouter , Depends ,HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from uuid import UUID
 from app.schemas.indemnity import *
 from app.services.financial.indemnity_service import *
-from app.core.database import AsyncSessionLocal , get_db
+from app.core.database import AsyncSessionLocal, get_db
 
 
 
@@ -23,7 +24,8 @@ async def createIdemnity(idemnity : CreateIdemnity , db : AsyncSessionLocal = De
 
 @app.delete("/deleteIdemnity" )
 async def delete(idemnity_id : str , db : AsyncSessionLocal = Depends(get_db)):
-    return await delete_idemnity
+    # call the service with provided id
+    return await delete_idemnity(idemnity_id, db)
 
 
 
