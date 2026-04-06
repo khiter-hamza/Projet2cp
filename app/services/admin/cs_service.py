@@ -22,6 +22,8 @@ from app.models.indemnity_calculation import Idemnity
 from app.models.enums import Status, CSDecision, UserRole
 from app.services.financial.indemnity_service import calculate_budjet
 from app.services.auth_service_utils import verify_cs_admin_role
+from app.services.notification.notification_service import create_notification, notify_admins
+from app.models.enums import NotificationType
 from app.schemas.application import ApplicationResponse
 
 
@@ -225,10 +227,29 @@ async def approve_application(
             # Create indemnity record (fee calculation happens in the endpoint or service)
             # This is just a placeholder for fee calculation logic
             pass
-        
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    message = f"Application {application.id} has been approved by the Scientific Council. Notes: {notes or 'No additional notes.'}"
+    try:
+        await create_notification(
+            db,
+            application.user_id,
+            "Your application has been approved",
+            message,
+            NotificationType.cs_decision,
+            demande_id=application.id,
+        )
+        await notify_admins(
+            db,
+            "Application approved by Scientific Council",
+            message,
+            NotificationType.cs_decision,
+            demande_id=application.id,
+        )
+    except Exception:
+        pass
     
     return {
         "message": "Application approved successfully",
@@ -288,6 +309,7 @@ async def reject_application(
     application.status = Status.REJECTED
     application.rejection_reason = rejection_reason
     application.rejected_at = datetime.now()
+    application.closed_at = datetime.now()
     
     try:
         await db.commit()
@@ -295,6 +317,26 @@ async def reject_application(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    message = f"Application {application.id} has been rejected by the Scientific Council. Reason: {rejection_reason}"
+    try:
+        await create_notification(
+            db,
+            application.user_id,
+            "Your application has been rejected",
+            message,
+            NotificationType.cs_decision,
+            demande_id=application.id,
+        )
+        await notify_admins(
+            db,
+            "Application rejected by Scientific Council",
+            message,
+            NotificationType.cs_decision,
+            demande_id=application.id,
+        )
+    except Exception:
+        pass
     
     return {
         "message": "Application rejected successfully",

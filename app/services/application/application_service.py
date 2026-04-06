@@ -18,6 +18,8 @@ from app.services.auth_service_utils import (
     verify_cs_admin_or_chercheur,
     verify_ownership
 )
+from app.services.notification.notification_service import create_notification, notify_admins
+from app.models.enums import NotificationType
 
 
 async def getUserApplication(app_id: UUID, user_id: UUID, db: AsyncSession):
@@ -299,6 +301,67 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Eligibility check failed: {str(e)}")
+
+
+async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest, db: AsyncSession, user_id: UUID):
+    """
+    Cancel an approved application by a researcher.
+
+    Authorization: chercheur only (own application)
+    Conditions: only approved applications can be cancelled by the applicant.
+    """
+    user = await verify_chercheur_role(user_id, db)
+
+    application = await db.get(Application, app_id)
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+
+    if application.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to cancel this application")
+
+    if application.status != Status.APPROVED:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only approved applications can be cancelled. Current status: {application.status}"
+        )
+
+    if not data.reason or not data.reason.strip():
+        raise HTTPException(status_code=400, detail="Cancellation reason is required")
+
+    application.status = Status.CANCELLED
+    application.cancellation_reason = data.reason.strip()
+    application.cancelled_at = datetime.now()
+    application.cancellation_requested_by = user.id
+    application.closed_at = datetime.now()
+
+    try:
+        await db.commit()
+        await db.refresh(application)
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    message = f"Application {application.id} has been cancelled by the researcher. Reason: {application.cancellation_reason}"
+    try:
+        await create_notification(
+            db,
+            user.id,
+            "Your application has been cancelled",
+            message,
+            NotificationType.status_change,
+            demande_id=application.id,
+        )
+        await notify_admins(
+            db,
+            "Researcher cancelled an approved application",
+            message,
+            NotificationType.status_change,
+            demande_id=application.id,
+        )
+    except Exception:
+        pass
+
+    return ApplicationResponse.model_validate(application)
 
 
 async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):

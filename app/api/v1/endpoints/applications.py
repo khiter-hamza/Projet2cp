@@ -31,6 +31,15 @@ async def update_draft_endpoint(id: UUID, data: ApplicationUpsert, db: Annotated
 async def submit_draft_endpoint(app_id: UUID, data: ApplicationUpsert, db: Annotated[AsyncSession, Depends(get_db)], user_id: Annotated[UUID, Depends(get_current_user)]):
     return await submitDraft(data, app_id, db, user_id)
 
+@router.post("/{app_id}/cancel", response_model=ApplicationResponse)
+async def cancel_application_endpoint(
+    app_id: UUID,
+    data: ApplicationCancellationRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user_id: Annotated[UUID, Depends(get_current_user)]
+):
+    return await cancel_application(app_id, data, db, user_id)
+
 @router.delete("/{app_id}", status_code=204)
 async def delete_draft_endpoint(app_id: UUID, db: Annotated[AsyncSession, Depends(get_db)], user_id: Annotated[UUID, Depends(get_current_user)]):
     return await deleteDraft(app_id, db, user_id)

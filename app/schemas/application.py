@@ -26,6 +26,8 @@ class ApplicationResponse(BaseModel):
     verification_errors: str | None = None
     cs_decision: CSDecision | None = None
     rejection_reason: str | None = None
+    cancellation_reason: str | None = None
+    cancelled_at: datetime | None = None
     calculated_fees: float | None = None
     created_at: datetime
     submitted_at: datetime | None = None
@@ -33,6 +35,15 @@ class ApplicationResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class ApplicationCancellationRequest(BaseModel):
+    """Request body for researcher cancellation after approval."""
+    reason: str
+
+    class Config:
+        example = {
+            "reason": "Visa refused by the host country"
+        }
 
 class ApplicationUpsert(BaseModel):
     """Pour créer OU modifier un brouillon"""

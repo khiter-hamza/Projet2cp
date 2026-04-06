@@ -14,13 +14,18 @@ class CSDecisionCount(BaseModel):
     decision: CSDecision | None
     count: int
 
+class BudgetStatus(BaseModel):
+    """Budget information for a session."""
+    total_budget: float
+    committed_amount: float
+    percentage_used: float
+    remaining_budget: float
+    beneficiary_count: int  # Number of researchers funded
+
 class ResearcherDashboardResponse(BaseModel):
-    applications: List[ApplicationResponse]
-    status_counts: List[StatusCount]
-    total_applications: int
-    eligible_count: int
-    pending_count: int
+    application: ApplicationResponse | None
     current_session_name: Optional[str] = None
+    current_session_opened: bool = False
 
 class AdminDashboardFilters(BaseModel):
     session_id: Optional[str] = None
@@ -33,6 +38,9 @@ class AdminDashboardFilters(BaseModel):
     is_eligible: Optional[bool] = None
     start_date_from: Optional[date] = None
     start_date_to: Optional[date] = None
+    search: Optional[str] = None
+    limit: int = 50
+    offset: int = 0
 
 def get_admin_dashboard_filters(
     session_id: Optional[str] = Query(None),
@@ -45,6 +53,9 @@ def get_admin_dashboard_filters(
     is_eligible: Optional[bool] = Query(None),
     start_date_from: Optional[date] = Query(None),
     start_date_to: Optional[date] = Query(None),
+    search: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ) -> AdminDashboardFilters:
     return AdminDashboardFilters(
         session_id=session_id,
@@ -57,18 +68,33 @@ def get_admin_dashboard_filters(
         is_eligible=is_eligible,
         start_date_from=start_date_from,
         start_date_to=start_date_to,
+        search=search,
+        limit=limit,
+        offset=offset,
     )
 
 class AdminDashboardResponse(BaseModel):
+    """Admin dashboard with comprehensive application overview."""
     total_applications: int
     applications_by_status: List[StatusCount]
     applications_by_decision: List[CSDecisionCount]
-    recent_applications: List[ApplicationResponse]  # Last 10
+    
+    # Paginated applications list
+    applications: List[ApplicationResponse]
+    has_more: bool
+    
+    # Summary counts
     eligible_count: int
     approved_count: int
     rejected_count: int
     pending_cs_count: int
+    
+    # Budget information
+    budget_status: Optional[BudgetStatus] = None
+    
+    # Session info
     current_session_name: Optional[str] = None
+    session_id: Optional[str] = None
     filters_applied: AdminDashboardFilters
 
 class CSDashboardResponse(BaseModel):

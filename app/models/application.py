@@ -63,6 +63,22 @@ class Application(Base):
     back_populates="applications"
 )
     cancellation_requested_by_user = relationship("User", foreign_keys=[cancellation_requested_by])
-    documents = relationship("Document", back_populates="application")
+    #documents = relationship("Document", back_populates="application")
     session = relationship("Session", back_populates="applications")
     idemnities = relationship("Idemnity" , back_populates="application")
+    documents = relationship(
+    "Document",
+    back_populates="application",
+    foreign_keys="Document.application_id"
+    )
+    stage_report = relationship(
+    "Document",
+    foreign_keys=[stage_report_id],
+    post_update=True
+    )
+
+    attestation = relationship(
+    "Document",
+    foreign_keys=[attestation_id],
+    post_update=True
+    )
