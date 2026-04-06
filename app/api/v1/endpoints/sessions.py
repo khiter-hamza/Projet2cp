@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -27,11 +27,15 @@ async def create_session(
     if data.end_date < date.today():
         raise HTTPException(status_code=400, detail="end_date must be in the future")
 
+    await db.execute(update(Session).values(is_active=False))
+
     new_session = Session(
         name=data.name,
         academic_year=data.academic_year,
         start_date=data.start_date,
         end_date=data.end_date,
+        is_active=True,
+        is_open=True,
         created_by=user.id,
     )
     db.add(new_session)
@@ -54,7 +58,7 @@ async def list_sessions(
 @router.get("/active", response_model=SessionResponse)#for the front end  to get the active session if there is no active session it will return 404 and the front end can handle it by showing a message or something like that//
 async def get_active_session(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
-        select(Session).where(Session.is_open == True, Session.end_date >= date.today())
+        select(Session).where(Session.is_active == True)
     )
     session = result.scalar_one_or_none()
     if not session:
@@ -95,6 +99,13 @@ async def update_session(
         new_end = update_data.get("end_date", session.end_date)
         if new_start >= new_end:
             raise HTTPException(status_code=400, detail="start_date must be before end_date")
+
+    if update_data.get("is_active") is True:
+        await db.execute(
+            update(Session)
+            .where(Session.id != session_id)
+            .values(is_active=False)
+        )
 
     for field, value in update_data.items():
         setattr(session, field, value)

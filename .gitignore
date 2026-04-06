@@ -8,3 +8,6 @@ __pycache__/
 dist/
 build/
 uploads/
+Attestation1.docx
+pdf/
+generated/
