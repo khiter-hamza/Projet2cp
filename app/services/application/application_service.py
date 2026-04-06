@@ -2,7 +2,8 @@ from fastapi import HTTPException, Response , Depends
 from uuid import UUID
 from datetime import datetime
 from pydantic import ValidationError
-from sqlalchemy import select, desc, asc, or_, String
+from sqlalchemy import select, func, desc, asc, or_, String
+from sqlalchemy.orm import selectinload
 from app.core.database import AsyncSession
 from app.schemas.application import *
 from app.models.application import Application
@@ -10,35 +11,67 @@ from app.models.user import User
 from app.models.session import Session
 from app.models.enums import *
 from app.services.application.eligibility_service import perform_eligibility_check
+from app.core.database import AsyncSessionLocal, get_db
+from app.services.auth_service_utils import (
+    verify_chercheur_role,
+    verify_cs_admin_role,
+    verify_cs_admin_or_chercheur,
+    verify_ownership
+)
 
 
-async def getUserApplication(app_id: UUID, db: AsyncSession):
-    application = await db.get(Application, app_id)
+async def getUserApplication(app_id: UUID, user_id: UUID, db: AsyncSession):
+    """
+    Get an application.
+    
+    Authorization:
+    - chercheur: Can only get own applications
+    - CS admin:  Can get any application
+    """
+    user = await verify_cs_admin_or_chercheur(user_id, db)
+    
+    result = await db.execute(
+        select(Application)
+        .options(selectinload(Application.documents))
+        .where(Application.id == app_id)
+    )
+    application = result.scalar_one_or_none()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
+    
+    # Chercheur can only see own applications
+    if user.role == UserRole.chercheur and application.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this application")
+    
     return ApplicationResponse.model_validate(application)
 
 
 async def createDraft(data: ApplicationUpsert, db: AsyncSession, user_id: UUID):
-    user = await db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    """
+    Create a new draft application.
     
-    if user.role != UserRole.chercheur:
-        raise HTTPException(status_code=403, detail="Not authorized to create applications")
+    Authorization: chercheur only
+    Restrictions: Max 1 draft per user at a time, must be in current session
+    """
+    user = await verify_chercheur_role(user_id, db)
     
-
+    # Get current session
+    current_session = await get_current_session(db)
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available for creating applications")
+    
     result = await db.execute(
         select(Application)
         .where(Application.user_id == user_id)
         .where(Application.status == Status.DRAFT)
+        .where(Application.session_id == current_session.id)
     )
     existing_draft = result.scalar_one_or_none()
     
     if existing_draft:
-        raise HTTPException(status_code=409, detail="A draft already exists for this user")
+        raise HTTPException(status_code=409, detail="A draft already exists for this user in the current session")
     
-    application = Application(user_id=user.id, **data.model_dump())
+    application = Application(user_id=user.id, session_id=current_session.id, **data.model_dump())
     
     if user.grade in (UserGrade.doctorant_non_salarie, UserGrade.doctorant_salarie):
         application.stage_type = StageType.stage_perfectionnement
@@ -53,17 +86,40 @@ async def createDraft(data: ApplicationUpsert, db: AsyncSession, user_id: UUID):
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    return ApplicationResponse.model_validate(application)
+    # Load documents relationship
+    result = await db.execute(
+        select(Application)
+        .options(selectinload(Application.documents))
+        .where(Application.id == application.id)
+    )
+    application_with_docs = result.scalar_one()
+    return ApplicationResponse.model_validate(application_with_docs)
 
 
 async def updateDraft(app_id: UUID, data: ApplicationUpsert, db: AsyncSession, user_id: UUID):
+    """
+    Update a draft application.
+    
+    Authorization: chercheur only (own application)
+    """
+    user = await verify_chercheur_role(user_id, db)
+    
+    # Get current session
+    current_session = await get_current_session(db)
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available")
+    
     draft = await db.get(Application, app_id)
     
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     
-    if draft.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to update this application")
+    # Verify ownership
+    await verify_ownership(draft.user_id, user_id)
+    
+    # Verify session
+    if draft.session_id != current_session.id:
+        raise HTTPException(status_code=403, detail="Application is not in the current session")
     
     if draft.status != Status.DRAFT:
         raise HTTPException(status_code=403, detail="Only drafts can be updated")
@@ -78,18 +134,49 @@ async def updateDraft(app_id: UUID, data: ApplicationUpsert, db: AsyncSession, u
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    return ApplicationResponse.model_validate(draft)
+    # Load documents relationship
+    result = await db.execute(
+        select(Application)
+        .options(selectinload(Application.documents))
+        .where(Application.id == draft.id)
+    )
+    draft_with_docs = result.scalar_one()
+    return ApplicationResponse.model_validate(draft_with_docs)
 
 
 async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: ApplicationFilterParams ):
+    """
+    List applications.
+    
+    Authorization:
+    - chercheur: Can only list own applications in current session
+    - CS admin:  Can list all applications in current session
+    """
+    user = await verify_cs_admin_or_chercheur(user_id, db)
+    
     filters = appFilterQuery.model_dump()
-    query = select(Application)
+    query = select(Application).join(Application.user).options(selectinload(Application.documents))  # Join for user filters and load documents
+    
+    # Default filter: current session
+    current_session = await get_current_session(db)
+    if current_session:
+        query = query.where(Application.session_id == current_session.id)
+    
+    # Chercheur can only see own applications
+    if user.role == UserRole.chercheur:
+        query = query.where(Application.user_id == user_id)
     
     if filters.get("status"):
         query = query.where(Application.status == filters["status"])    
     
     if filters.get("user_id"):
-        query = query.where(Application.user_id.cast(String) == filters["user_id"])
+        # CS admin can filter by user_id, chercheur cannot
+        if user.role == UserRole.chercheur:
+            raise HTTPException(status_code=403, detail="Cannot filter by other user_id")
+        query = query.where(Application.user_id == UUID(filters["user_id"]))
+    
+    if filters.get("session_id"):
+        query = query.where(Application.session_id == UUID(filters["session_id"]))
     
     if filters.get("stage_type"):
         query = query.where(Application.stage_type == filters["stage_type"])
@@ -100,6 +187,16 @@ async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: Appl
     if filters.get("cs_decision"):
         query = query.where(Application.cs_decision == filters["cs_decision"])
     
+    if filters.get("is_eligible") is not None:
+        query = query.where(Application.is_eligible == filters["is_eligible"])
+    
+    if filters.get("zone_id"):
+        # TODO: Implement zone filtering - zones are related to indemnities, not users
+        pass
+    
+    if filters.get("user_grade"):
+        query = query.where(User.grade == filters["user_grade"])
+    
     if filters.get("start_date_from"):
         query = query.where(Application.start_date >= filters["start_date_from"])
     
@@ -108,7 +205,7 @@ async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: Appl
     
     if filters.get("search"):
         search_term = f"%{filters['search']}%"
-        query = query.join(Application.user).where(
+        query = query.where(
             or_(
                 User.username.ilike(search_term),
                 Application.scientific_objective.ilike(search_term),
@@ -118,7 +215,17 @@ async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: Appl
             )
         )
     
-    sort_column = getattr(Application, filters.get("sort_by", "submitted_at"), Application.created_at)
+    # Sorting
+    sort_by = filters.get("sort_by", "submitted_at")
+    if sort_by == "zone":
+        sort_column = User.zone
+    elif sort_by == "user_grade":
+        sort_column = User.grade
+    elif sort_by == "session_id":
+        sort_column = Application.session_id
+    else:
+        sort_column = getattr(Application, sort_by, Application.created_at)
+    
     if filters.get("sort_order") == "asc":
         query = query.order_by(asc(sort_column))
     else:
@@ -134,13 +241,30 @@ async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: Appl
 
 
 async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSession, user_id: UUID):
+    """
+    Submit a draft application for review.
+    
+    Authorization: chercheur only (own application)
+    Actions: Transitions DRAFT → SUBMITTED, runs eligibility check
+    """
+    user = await verify_chercheur_role(user_id, db)
+    
+    # Get current session
+    current_session = await get_current_session(db)
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available")
+    
     application = await db.get(Application, app_id)
     
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     
-    if application.user_id != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    # Verify ownership
+    await verify_ownership(application.user_id, user_id)
+    
+    # Verify session
+    if application.session_id != current_session.id:
+        raise HTTPException(status_code=403, detail="Application is not in the current session")
     
     if application.status != Status.DRAFT:
         raise HTTPException(status_code=409, detail="Only drafts can be submitted")
@@ -178,10 +302,23 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
 
 
 async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
+    """
+    Delete a draft application.
+    
+    Authorization: chercheur only (own application)
+    """
+    user = await verify_chercheur_role(user_id, db)
+    
+    # Get current session
+    current_session = await get_current_session(db)
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available")
+    
     result = await db.execute(
         select(Application)
         .where(Application.id == app_id)
         .where(Application.user_id == user_id)
+        .where(Application.session_id == current_session.id)
     )
     draft = result.scalar_one_or_none()
     
@@ -199,12 +336,10 @@ async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     return Response(status_code=204)
-from app.core.database import AsyncSessionLocal, get_db
-from app.schemas.session import SessionResponse
 
-async def get_current_session(db: AsyncSessionLocal = Depends(get_db)):
+async def get_current_session(db: AsyncSession):
     result = await db.execute(
-        select(Session).where(Session.is_active == True, Session.end_date >= datetime.date.today())
+        select(Session).where(Session.is_open == True).where(Session.end_date >= datetime.date.today())
     )
     session = result.scalar_one_or_none()
     return session
