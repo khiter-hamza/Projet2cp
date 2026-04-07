@@ -12,7 +12,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.database import AsyncSession, get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user_id
 from app.schemas.cs import (
     CSDecisionRequest,
     CSPreparationResponse,
@@ -39,7 +39,7 @@ router = APIRouter()
 async def prepare_cs_deliberation_endpoint(
     session_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user_id: Annotated[UUID, Depends(get_current_user)]
+    current_user_id: Annotated[UUID, Depends(get_current_user_id)]
 ):
     """
     Prepare CS deliberation for a session.
@@ -75,7 +75,7 @@ async def prepare_cs_deliberation_endpoint(
 async def get_cs_dashboard_endpoint(
     session_id: Annotated[Optional[UUID], Query()] = None,
     db: Annotated[AsyncSession, Depends(get_db)] = None,
-    current_user_id: Annotated[UUID, Depends(get_current_user)] = None
+    current_user_id: Annotated[UUID, Depends(get_current_user_id)] = None
 ):
     """
     Get CS deliberation dashboard.
@@ -115,7 +115,7 @@ async def cs_deliberation_endpoint(
     application_id: UUID,
     request: CSDecisionRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user_id: Annotated[UUID, Depends(get_current_user)]
+    current_user_id: Annotated[UUID, Depends(get_current_user_id)]
 ):
     """
     Make CS decision on an application: APPROVE or REJECT.
@@ -187,7 +187,7 @@ async def cs_deliberation_endpoint(
 async def get_cs_statistics_endpoint(
     session_id: Optional[UUID] = None,
     db: Annotated[AsyncSession, Depends(get_db)] = None,
-    current_user_id: Annotated[UUID, Depends(get_current_user)] = None
+    current_user_id: Annotated[UUID, Depends(get_current_user_id)] = None
 ):
     """
     Get CS decision statistics and history.

@@ -69,7 +69,7 @@ class ApplicationSubmission(BaseModel):
     host_institution: str 
     scientific_objective: str 
     created_at: datetime
-    submitted_at: datetime
+    submitted_at: datetime | None = None
     
     class Config:
         from_attributes = True

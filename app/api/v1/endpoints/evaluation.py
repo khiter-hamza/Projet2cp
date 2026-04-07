@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Annotated
 
 from app.core.database import AsyncSession, get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user_id
 from app.services.evaluation.criteria_service import calculate_score
 from app.schemas.evaluation import ScoreResponse, ScoringDetailResponse
 
@@ -25,7 +25,7 @@ router = APIRouter()
 async def get_user_score_endpoint(
     user_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user_id: Annotated[UUID, Depends(get_current_user)]
+    current_user_id: Annotated[UUID, Depends(get_current_user_id)]
 ):
     """
     Get the score for a user based on their application history.
@@ -47,7 +47,7 @@ async def get_user_score_endpoint(
 async def get_application_score_endpoint(
     application_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    current_user_id: Annotated[UUID, Depends(get_current_user)]
+    current_user_id: Annotated[UUID, Depends(get_current_user_id)]
 ):
     """
     Get the score for the user who submitted the application.

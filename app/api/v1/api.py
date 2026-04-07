@@ -26,13 +26,13 @@ api_router.include_router(users.router, prefix="/user", tags=["users"])
 
 api_router.include_router(auth.router, prefix="/auth", tags=["authentication"])
 
+# History must come before applications (before /{id} catch-all route)
+api_router.include_router(history.router, prefix="/applications", tags=["history"])
 api_router.include_router(applications.router , prefix="/applications" , tags=["applications"])
 
 api_router.include_router(documents.router, prefix="", tags=["documents"])
 api_router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
-api_router.include_router(applications.router, prefix="/applications", tags=["applications"])
 api_router.include_router(eligibility.router, prefix="/applications", tags=["eligibility"])
-api_router.include_router(history.router, prefix="/applications", tags=["history"])
 api_router.include_router(evaluation.router, prefix="/evaluation", tags=["scoring"])
 api_router.include_router(idemnity.app , prefix="/idemnity" , tags=["budjet and zones"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])

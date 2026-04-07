@@ -1,0 +1,761 @@
+{
+  "info": {
+    "_postman_id": "projet2cp-api-workflow",
+    "name": "Projet 2CP - Complete API Workflow",
+    "description": "Complete collection for testing the Projet 2CP API workflow including authentication, applications, documents, eligibility, and CS operations",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Register Researcher",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"researcher@test.com\",\n  \"username\": \"researcher_user\",\n  \"lastname\": \"Test\",\n  \"password\": \"TestPassword123!\",\n  \"role\": \"chercheur\",\n  \"grade\": \"professeur\",\n  \"anciente\": 5,\n  \"laboratory_name\": \"Lab1\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Register Admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@test.com\",\n  \"username\": \"admin_user\",\n  \"lastname\": \"Admin\",\n  \"password\": \"AdminPassword123!\",\n  \"role\": \"admin_dpgr\",\n  \"grade\": \"professeur\",\n  \"anciente\": 10,\n  \"laboratory_name\": \"Admin_Lab\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login Researcher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.environment.set('researcher_token', jsonData.access_token);",
+                  "    pm.environment.set('researcher_id', jsonData.user_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"researcher@test.com\",\n  \"password\": \"TestPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.environment.set('admin_token', jsonData.access_token);",
+                  "    pm.environment.set('admin_id', jsonData.user_id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@test.com\",\n  \"password\": \"AdminPassword123!\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Session Management",
+      "item": [
+        {
+          "name": "Get Active Session",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/sessions/active",
+              "host": ["{{base_url}}"],
+              "path": ["sessions", "active"]
+            }
+          }
+        },
+        {
+          "name": "Create Session (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.environment.set('session_id', jsonData.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"2024-2025 Academic Year\",\n  \"academic_year\": \"2024-2025\",\n  \"start_date\": \"2024-02-15\",\n  \"end_date\": \"2024-06-30\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sessions/",
+              "host": ["{{base_url}}"],
+              "path": ["sessions", ""]
+            }
+          }
+        },
+        {
+          "name": "List Sessions (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sessions/",
+              "host": ["{{base_url}}"],
+              "path": ["sessions", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Applications",
+      "item": [
+        {
+          "name": "Create Draft Application",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.environment.set('application_id', jsonData.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination_country\": \"france\",\n  \"destination_city\": \"Paris\",\n  \"host_institution\": \"University of Paris\",\n  \"scientific_objective\": \"Research on AI and machine learning\",\n  \"start_date\": \"2024-02-20\",\n  \"end_date\": \"2024-03-20\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/applications/",
+              "host": ["{{base_url}}"],
+              "path": ["applications", ""]
+            }
+          }
+        },
+        {
+          "name": "Get Application",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/applications/{{application_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["applications", "{{application_id}}"]
+            }
+          }
+        },
+        {
+          "name": "List Applications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/applications/",
+              "host": ["{{base_url}}"],
+              "path": ["applications", ""]
+            }
+          }
+        },
+        {
+          "name": "Update Draft Application",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination_country\": \"france\",\n  \"destination_city\": \"Lyon\",\n  \"host_institution\": \"Claude Bernard University\",\n  \"scientific_objective\": \"Advanced research on distributed systems and AI\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/applications/{{application_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["applications", "{{application_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Submit Application",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"destination_country\": \"france\",\n  \"destination_city\": \"Lyon\",\n  \"host_institution\": \"Claude Bernard University\",\n  \"scientific_objective\": \"Advanced research on distributed systems and AI\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/applications/{{application_id}}/submit",
+              "host": ["{{base_url}}"],
+              "path": ["applications", "{{application_id}}", "submit"]
+            }
+          }
+        },
+        {
+          "name": "Cancel Application",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Visa refused by the host country\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/applications/{{application_id}}/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["applications", "{{application_id}}", "cancel"]
+            }
+          }
+        },
+        {
+          "name": "Delete Draft Application",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/applications/{{application_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["applications", "{{application_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Documents",
+      "item": [
+        {
+          "name": "Upload Document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.environment.set('document_id', jsonData.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": [],
+                  "disabled": false
+                },
+                {
+                  "key": "document_type",
+                  "value": "cv",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/applications/{{application_id}}/documents",
+              "host": ["{{base_url}}"],
+              "path": ["applications", "{{application_id}}", "documents"]
+            }
+          }
+        },
+        {
+          "name": "Get Documents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/applications/{{application_id}}/documments",
+              "host": ["{{base_url}}"],
+              "path": ["applications", "{{application_id}}", "documments"]
+            }
+          }
+        },
+        {
+          "name": "Delete Document",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/document/{{document_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["document", "{{document_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Eligibility & Evaluation",
+      "item": [
+        {
+          "name": "Check Eligibility",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/applications/{{application_id}}/check-eligibility",
+              "host": ["{{base_url}}"],
+              "path": ["applications", "{{application_id}}", "check-eligibility"]
+            }
+          }
+        },
+        {
+          "name": "Get Eligibility Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/applications/{{application_id}}/eligibility-details",
+              "host": ["{{base_url}}"],
+              "path": ["applications", "{{application_id}}", "eligibility-details"]
+            }
+          }
+        },
+        {
+          "name": "Get User Score",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/evaluation/users/{{researcher_id}}/score",
+              "host": ["{{base_url}}"],
+              "path": ["evaluation", "users", "{{researcher_id}}", "score"]
+            }
+          }
+        },
+        {
+          "name": "Get Application Score",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/evaluation/applications/{{application_id}}/score",
+              "host": ["{{base_url}}"],
+              "path": ["evaluation", "applications", "{{application_id}}", "score"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. History & Tracking",
+      "item": [
+        {
+          "name": "Get Application History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/applications/{{application_id}}/history?limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["applications", "{{application_id}}", "history"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get History Page",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{researcher_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/applications/history?limit=50&offset=0&sort_by=submitted_at&sort_order=desc&session_filter=this",
+              "host": ["{{base_url}}"],
+              "path": ["applications", "history"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "sort_by",
+                  "value": "submitted_at"
+                },
+                {
+                  "key": "sort_order",
+                  "value": "desc"
+                },
+                {
+                  "key": "session_filter",
+                  "value": "this"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. CS Workflow (Admin)",
+      "item": [
+        {
+          "name": "Prepare CS Deliberation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cs/prepare-deliberation/{{session_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["cs", "prepare-deliberation", "{{session_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get CS Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cs/dashboard?session_id={{session_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["cs", "dashboard"],
+              "query": [
+                {
+                  "key": "session_id",
+                  "value": "{{session_id}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Approve Application",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cs/applications/{{application_id}}/approve",
+              "host": ["{{base_url}}"],
+              "path": ["cs", "applications", "{{application_id}}", "approve"]
+            }
+          }
+        },
+        {
+          "name": "Reject Application",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Insufficient research background\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/cs/applications/{{application_id}}/reject",
+              "host": ["{{base_url}}"],
+              "path": ["cs", "applications", "{{application_id}}", "reject"]
+            }
+          }
+        },
+        {
+          "name": "Get CS Decision History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/cs/decision-history?limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["cs", "decision-history"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "researcher_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "admin_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "researcher_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "admin_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "session_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "application_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "document_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

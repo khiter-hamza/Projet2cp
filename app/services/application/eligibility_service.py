@@ -200,15 +200,19 @@ async def check_documents(
     
     # Find missing documents
     missing_docs = [
-        doc.value for doc in required_docs if doc not in uploaded_types
+        doc for doc in required_docs if doc not in uploaded_types
     ]
     
     all_present = len(missing_docs) == 0
     
+    # Helper function to get value from enum or string
+    def get_enum_value(item):
+        return item.value if hasattr(item, 'value') else item
+    
     document_detail = DocumentCheckDetail(
-        required_documents=[doc.value for doc in required_docs],
-        uploaded_documents=[doc.value for doc in uploaded_types],
-        missing_documents=[doc.value for doc in missing_docs],
+        required_documents=[get_enum_value(doc) for doc in required_docs],
+        uploaded_documents=[get_enum_value(doc) for doc in uploaded_types],
+        missing_documents=[get_enum_value(doc) for doc in missing_docs],
         all_documents_present=all_present
     )
     
@@ -222,13 +226,14 @@ async def check_documents(
 
 async def perform_eligibility_check(
     application_id: UUID,
-    db: AsyncSession
+    db: AsyncSession,
+    save: bool = True
 ) -> EligibilityCheckResult:
     """
     Main eligibility verification function.
     
     Performs all three checks and returns comprehensive result.
-    Updates Application status based on eligibility result.
+    Updates Application status based on eligibility result when save is True.
     """
     
     # Get application with user
@@ -267,25 +272,26 @@ async def perform_eligibility_check(
     # Determine overall eligibility
     is_eligible = (grade_eligible and history_eligible and docs_eligible)
     
-    # Update application with results
-    application.is_eligible = is_eligible
-    application.verified_at = datetime.utcnow()
-    application.verification_errors = "; ".join(errors) if errors else None
-    
-    # Update application status based on eligibility
-    if is_eligible:
-        application.status = Status.CS_PREPARATION
-    else:
-        application.status = Status.REJECTED
-        application.rejection_reason = "; ".join(errors)
-        application.rejected_at = datetime.utcnow()
-    
-    await db.commit()
-    await db.refresh(application)
+    if save:
+        # Update application with results
+        application.is_eligible = is_eligible
+        application.verified_at = datetime.utcnow()
+        application.verification_errors = "; ".join(errors) if errors else None
+        
+        # Update application status based on eligibility
+        if is_eligible:
+            application.status = Status.CS_PREPARATION
+        else:
+            application.status = Status.REJECTED
+            application.rejection_reason = "; ".join(errors)
+            application.rejected_at = datetime.utcnow()
+        
+        await db.commit()
+        await db.refresh(application)
     
     result_obj = EligibilityCheckResult(
         is_eligible=is_eligible,
-        verified_at=application.verified_at,
+        verified_at=application.verified_at if save else datetime.utcnow(),
         eligible_by_grade=grade_eligible,
         eligible_by_history=history_eligible,
         eligible_by_documents=docs_eligible,

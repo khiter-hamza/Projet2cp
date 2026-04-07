@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Annotated
 
 from app.core.database import AsyncSession, get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user_id
 from app.services.application.eligibility_service import (
     perform_eligibility_check,
     get_eligibility_details
@@ -27,7 +27,7 @@ router = APIRouter()
 async def check_eligibility_endpoint(
     application_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user_id: Annotated[UUID, Depends(get_current_user)]
+    user_id: Annotated[UUID, Depends(get_current_user_id)]
 ):
     """
     Perform eligibility verification on an application.
@@ -36,7 +36,7 @@ async def check_eligibility_endpoint(
     Only the owner of the application or an admin can trigger this.
     """
     try:
-        result = await perform_eligibility_check(application_id, db)
+        result = await perform_eligibility_check(application_id, db, save=False)
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -48,7 +48,7 @@ async def check_eligibility_endpoint(
 async def get_eligibility_details_endpoint(
     application_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user_id: Annotated[UUID, Depends(get_current_user)]
+    user_id: Annotated[UUID, Depends(get_current_user_id)]
 ):
     """
     Get detailed eligibility information for an application.

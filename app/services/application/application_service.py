@@ -1,6 +1,6 @@
 from fastapi import HTTPException, Response , Depends
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, date
 from pydantic import ValidationError
 from sqlalchemy import select, func, desc, asc, or_, String
 from sqlalchemy.orm import selectinload
@@ -402,7 +402,7 @@ async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
 
 async def get_current_session(db: AsyncSession):
     result = await db.execute(
-        select(Session).where(Session.is_open == True).where(Session.end_date >= datetime.date.today())
+        select(Session).where(Session.is_open == True).where(Session.end_date >= date.today())
     )
     session = result.scalar_one_or_none()
     return session
