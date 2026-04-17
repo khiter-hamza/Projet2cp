@@ -10,7 +10,7 @@ Handles:
 
 from uuid import UUID
 from datetime import datetime
-from sqlalchemy import select, and_, desc
+from sqlalchemy import select, and_, desc ,asc
 from sqlalchemy.orm import joinedload
 from fastapi import HTTPException
 
@@ -49,6 +49,7 @@ async def get_applications_for_cs_preparation(
             joinedload(Application.session)
         )
         .order_by(desc(Application.submitted_at))
+        .order_by(asc(Application.is_eligible))
     )
     return result.unique().scalars().all()
 
@@ -83,7 +84,7 @@ async def prepare_cs_deliberation(
     if not session.is_open:
         raise HTTPException(status_code=400, detail="Session is closed")
     
-    # Get eligible applications
+    # Get applications
     applications = await get_applications_for_cs_preparation(session_id, db)
     
     if not applications:
