@@ -1,10 +1,12 @@
 import uuid
-from fastapi import APIRouter , Depends , HTTPException
+from Projet2cp.app.services.auth.password_service import forgot_password, reset_password, verify_token_url
+from fastapi import APIRouter , Depends , HTTPException, BackgroundTasks
 from app.core.database import AsyncSessionLocal
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.user import CreateUser , UserResponse
+from app.schemas.user import CreateUser , UserResponse, forget_User, reset_Password
 from app.services.user.user_service import create_user , get_users , get_user , update_user
+
 
 router = APIRouter()  
 
@@ -32,7 +34,13 @@ async def update_user_endpoint(user_id : uuid.UUID, user_data : CreateUser, db :
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-
-
+    
+@router.post("/forget-password")
+async def forgot_password_endpoint(user: forget_User, db: AsyncSessionLocal = Depends(get_db), background_tasks: BackgroundTasks = Depends()):
+    return await forgot_password(user, db, background_tasks)
+@router.post("/reset-password/{token}")
+async def reset_password_endpoint(token:str,new_password: str, db: AsyncSessionLocal = Depends(get_db)):
+    return await reset_password(token, new_password, db)
+@router.get("/reset-password/{token}")
+async def verify_reset_token_endpoint(token: str, db: AsyncSessionLocal = Depends(get_db)):
+    return await verify_token_url(token, db)

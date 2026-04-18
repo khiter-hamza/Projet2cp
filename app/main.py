@@ -3,7 +3,8 @@ import asyncio
 import logging
 import traceback
 from datetime import date
-
+from Projet2cp.app.models.enums import Status
+from sqlalchemy.orm import joinedload
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,20 +38,28 @@ class ErrorLoggingMiddleware(BaseHTTPMiddleware):
 
 
 async def close_expired_sessions():
-    """Background task: auto-close sessions whose end_date has passed."""
+    
     while True:
         try:
             async with AsyncSessionLocal() as db:
-                await db.execute(
-                    update(Session)
-                    .where(Session.is_open == True, Session.end_date < date.today())
-                    .values(is_open=False)
-                )
-                await db.commit()
-                logger.info("Checked for expired sessions")
+                
+               res=await db.execute(select(Session).options(
+               joinedload(Session.applications)).where(Session.is_active == True, Session.end_date < date.today()))
+               result = res.scalar_one_or_none()
+               if result:
+                   applications=result.applications
+                   #for those who are in draft status we will change their status to submitted because the session is closed and they can't edit their application anymore and they can only see it and they can see the status of their application is submitted and they can see the date of submission of their application which is the date of closing of the session and for those who are in submitted status we will keep their status as submitted because they have already submitted their application and they can see the date of submission of their application which is the date of closing of the session and for those who are in accepted or rejected status we will keep their status as it is because they have already received a decision on their application and they can see the date of decision on their application which is the date of closing of the session
+                   for app in applications:
+                       if app.status==Status.DRAFT:
+                        app.status=Status.SUBMITTED
+
+                   result.is_open = False
+                   await db.commit()   
+
+               logger.info("Checked for expired sessions")
         except Exception:
             logger.error(f"Error closing expired sessions: {traceback.format_exc()}")
-        await asyncio.sleep(10000)  # check every 3 hours
+        await asyncio.sleep(10800)  # check every 3 hours
 
 
 @asynccontextmanager

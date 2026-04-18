@@ -30,3 +30,8 @@ class UserResponse(BaseModel):
 class UserLogin(BaseModel) :
     email :str
     password : str
+class forget_User(BaseModel):
+    email : str    
+class reset_Password(BaseModel):
+    token : str
+    new_password : str    
