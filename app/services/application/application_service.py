@@ -23,6 +23,24 @@ from app.services.auth_service_utils import (
 from app.services.notification.notification_service import create_notification, notify_admins
 from app.models.enums import NotificationType
 
+async def getCurrentApplication(db: AsyncSession, user_id: UUID):
+    current_session = await get_current_session(db)
+    await verify_chercheur_role(user_id=user_id,db=db)
+    
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available")
+
+    result = await db.execute(
+        select(Application)
+        .options(selectinload(Application.documents))
+        .where(Application.user_id == user_id, Application.session_id == current_session.id)
+    )
+    application = result.scalar_one_or_none()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    return ApplicationResponse.model_validate(application)
+
 
 async def getUserApplication(app_id: UUID, user_id: UUID, db: AsyncSession):
     """
@@ -363,8 +381,14 @@ async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest,
         )
     except Exception:
         pass
-
-    return ApplicationResponse.model_validate(application)
+    # Reload with documents for response serialization
+    result = await db.execute(
+        select(Application)
+        .options(selectinload(Application.documents))
+        .where(Application.id == application.id)
+    )
+    application_with_docs = result.scalar_one()
+    return ApplicationResponse.model_validate(application_with_docs)
 
 
 async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):

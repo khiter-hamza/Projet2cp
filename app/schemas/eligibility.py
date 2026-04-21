@@ -47,7 +47,7 @@ class EligibilityDetailedResponse(BaseModel):
     """Complete eligibility check response"""
     application_id: UUID
     is_eligible: bool
-    verified_at: datetime
+    verified_at: Optional[datetime] = None
     
     errors: List[str]
     

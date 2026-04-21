@@ -20,7 +20,7 @@ async def create_session(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "admin_dpgr":
+    if user.role.value != "asistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
     if data.start_date >= data.end_date:
         raise HTTPException(status_code=400, detail="start_date must be before end_date")
@@ -49,7 +49,7 @@ async def list_sessions(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "admin_dpgr":
+    if user.role.value != "asistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
     result = await db.execute(select(Session).order_by(Session.created_at.desc()))
     return result.scalars().all()
@@ -72,7 +72,7 @@ async def get_session(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "admin_dpgr":
+    if user.role.value != "asistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
     session = await db.get(Session, session_id)
     if not session:
@@ -88,7 +88,7 @@ async def update_session(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "admin_dpgr":
+    if user.role.value != "asistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
     session = await db.get(Session, session_id)
     if not session:
@@ -122,7 +122,7 @@ async def delete_session(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "admin_dpgr":
+    if user.role.value != "asistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
     session = await db.get(Session, session_id)
     if not session:

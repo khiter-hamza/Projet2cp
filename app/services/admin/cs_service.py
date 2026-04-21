@@ -11,7 +11,7 @@ from app.models.session import Session
 from app.models.user import User
 from app.models.indemnity_calculation import Idemnity
 from app.models.enums import Status, CSDecision, UserRole
-from app.services.financial.indemnity_service import calculate_budjet
+from app.services.financial.indemnity_service import calculate_budget
 from app.services.auth_service_utils import verify_cs_admin_role
 from app.services.notification.notification_service import create_notification, notify_admins
 from app.models.enums import NotificationType

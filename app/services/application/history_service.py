@@ -78,22 +78,23 @@ async def get_application_history(
         description="Application submitted",
         changed_by=application.user_id,
     )
-    add_event(
-        application.verified_at,
-        action="verification_completed",
-        new_status=application.status,
-        description="Eligibility verification completed",
-        verification_result=_to_verification_result(application.is_eligible),
-        verification_details=application.verification_errors,
-    )
-    if application.cs_decision == CSDecision.approuve:
+    if application.is_eligible is not None:
+        add_event(
+            application.submitted_at,
+            action="verification_completed",
+            new_status=application.status,
+            description="Eligibility verification completed",
+            verification_result=_to_verification_result(application.is_eligible),
+            verification_details=application.verification_errors,
+        )
+    if application.cs_decision == CSDecision.approved:
         add_event(
             application.approved_at,
             action="approved",
             new_status=Status.APPROVED,
             description="Application approved",
         )
-    elif application.cs_decision == CSDecision.rejete:
+    elif application.cs_decision == CSDecision.rejected:
         add_event(
             application.rejected_at,
             action="rejected",
@@ -207,7 +208,7 @@ async def get_application_history_page(
     total_pages = (total + limit - 1) // limit if limit > 0 else 1
 
     approved_count = sum(1 for app in applications if app.status == Status.APPROVED)
-    in_progress_count = sum(1 for app in applications if app.status in [Status.SUBMITTED, Status.CS_PREPARATION])
+    in_progress_count = sum(1 for app in applications if app.status in [Status.SUBMITTED])
     rejected_count = sum(1 for app in applications if app.status == Status.REJECTED)
     closed_count = sum(1 for app in applications if app.status == Status.CLOSED)
     cancelled_count = sum(1 for app in applications if app.status == Status.CANCELLED)

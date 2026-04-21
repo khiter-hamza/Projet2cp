@@ -11,6 +11,11 @@ from app.core.dependencies import get_current_user_id
 
 router = APIRouter()
 
+@router.get("/current", response_model=ApplicationResponse)
+async def get_current_application_endpoint(db: Annotated[AsyncSession, Depends(get_db)], user_id: Annotated[UUID, Depends(get_current_user_id)]):
+    return await getCurrentApplication(db, user_id)
+
+
 @router.get("/{id}", response_model=ApplicationResponse)
 async def get_User_application_endpoint(id: UUID, db: Annotated[AsyncSession, Depends(get_db)], user_id: Annotated[UUID, Depends(get_current_user_id)]):
     return await getUserApplication(id, user_id, db)

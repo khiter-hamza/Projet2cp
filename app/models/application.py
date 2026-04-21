@@ -48,7 +48,6 @@ class Application(Base):
     cancellation_requested_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
 
     created_at = Column(DateTime, nullable=False, default=datetime.today, index=True)
-#   updated_at = Column(DateTime, onupdate=datetime.today)
     submitted_at = Column(DateTime, index=True)
     approved_at = Column(DateTime, index=True)
     rejected_at = Column(DateTime, index=True)

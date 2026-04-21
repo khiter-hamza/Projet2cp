@@ -62,14 +62,17 @@ async def upload_document(    application_id: uuid.UUID,    document_type: Docum
 
 @router.get('/applications/{application_id}/documents',response_model=list[DocumentResponse])
 async def get_documents(application_id:uuid.UUID,db:AsyncSession=Depends(get_db),user=Depends(get_current_user)):
-   try:
-       res=await db.execute(select(Document).where(Document.application_id==application_id ,Document.user_id==user.id).order_by(Document.uploaded_at.desc()))
-       if not res:
-        raise HTTPException(status_code=404,detail='No document found with this demmende_id')
-       return res.scalars().all() 
-   except Exception as e:
-      print(e)
-      raise HTTPException(status_code=500,detail=str(e))
+    try:
+        res = await db.execute(select(Document).where(Document.application_id == application_id, Document.user_id == user.id).order_by(Document.uploaded_at.desc()))
+        documents = res.scalars().all()
+        if not documents:
+            raise HTTPException(status_code=404, detail='No document found with this demmende_id')
+        return documents
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=str(e))
    
 @router.delete('/document/{idd}')
 async def delete_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
@@ -118,27 +121,35 @@ async def download_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:U
 
 @router.get('/applications/{application_id}/documents/downloads')
 async def downlods_demende_documents(application_id:uuid.UUID,db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
-   try:
-       res=await db.execute(select(Document).options(
-        joinedload(Document.application).joinedload(Application.user)#retrive the user of the application to get the username and lastname for the zip file name un chapeux a vous
-    ).where(Document.application_id==application_id ,Document.user_id==user.id).order_by(Document.uploaded_at.desc()))
-       documents=res.scalars().all()
-       if not documents:
-        raise HTTPException(status_code=404,detail='No document found with this demmende_id')
-       zip_path = f"/tmp/{application_id}_{uuid.uuid4()}.zip"
+    try:
+        res = await db.execute(
+            select(Document).options(
+                joinedload(Document.application).joinedload(Application.user)
+            ).where(
+                Document.application_id == application_id,
+                Document.user_id == user.id
+            ).order_by(Document.uploaded_at.desc())
+        )
+        documents = res.scalars().all()
 
-       with zipfile.ZipFile(zip_path, "w") as zipf:
-        for doc in documents:
-            zipf.write(doc.file_path, arcname=doc.file_name)
-        
-       timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-       user_obj = documents[0].application.user
-       filename = f"documents_{user.username}_{user.lastname}_{timestamp}.zip"  
+        if not documents:
+            raise HTTPException(status_code=404, detail='No document found with this demmende_id')
 
-       return FileResponse(zip_path, filename=filename)    
-   except Exception as e:
-      print(e)
-      raise HTTPException(status_code=500,detail=str(e))
+        zip_path = f"/tmp/{application_id}_{uuid.uuid4()}.zip"
+        with zipfile.ZipFile(zip_path, "w") as zipf:
+            for doc in documents:
+                if os.path.exists(doc.file_path):
+                    zipf.write(doc.file_path, arcname=doc.file_name)
+
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        filename = f"documents_{user.username}_{user.lastname}_{timestamp}.zip"
+        return FileResponse(zip_path, filename=filename)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=str(e))
    
 
 @router.get('application/documents')
