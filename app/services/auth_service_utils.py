@@ -65,10 +65,10 @@ async def verify_cs_admin_role(user_id: UUID, db: AsyncSession) -> User:
     """
     user = await verify_user_exists(user_id, db)
     
-    if user.role not in [UserRole.admin_dpgr, UserRole.asistant_dpgr]:
+    if user.role is not UserRole.admin_dpgr: # UserRole.asistant_dpgr
         raise HTTPException(
             status_code=403,
-            detail="CS operations require admin_dpgr or asistant_dpgr role"
+            detail="CS operations require admin_dpgr role" # or asistant_dpgr 
         )
     
     return user

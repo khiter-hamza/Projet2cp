@@ -79,6 +79,7 @@ async def get_session(
         raise HTTPException(status_code=404, detail="Session not found")
     return session
 
+#to be deleted
 
 @router.patch("/{session_id}", response_model=SessionResponse)
 async def update_session(

@@ -6,7 +6,7 @@ Handles automatic eligibility checks for applications based on:
 2. User's application history
 3. Required documents
 """
-
+from fastapi import HTTPException
 from datetime import datetime
 from uuid import UUID
 from sqlalchemy import select, func
@@ -114,7 +114,7 @@ async def check_history(
     result = await db.execute(
         select(Application).where(
             Application.user_id == user_id,
-            Application.status.in_([Status.COMPLETED, Status.CLOSED])
+            Application.status.in_([Status.CLOSED])
         )
     )
     completed_apps = result.scalars().all()
@@ -272,33 +272,27 @@ async def perform_eligibility_check(
     # Determine overall eligibility
     is_eligible = (grade_eligible and history_eligible and docs_eligible)
     
-    if save:
-        # Update application with results
-        application.is_eligible = is_eligible
-        application.verified_at = datetime.utcnow()
-        application.verification_errors = "; ".join(errors) if errors else None
-        
-        # Update application status based on eligibility
-        if is_eligible:
-            application.status = Status.CS_PREPARATION
-        else:
-            application.status = Status.REJECTED
-            application.rejection_reason = "; ".join(errors)
-            application.rejected_at = datetime.utcnow()
-        
+    # Update application with results
+    application.is_eligible = is_eligible
+    application.verification_errors = "; ".join(errors) if errors else None
+    try:   
         await db.commit()
         await db.refresh(application)
-    
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500,detail=f"Database error: {str(e)}")
+                            
     result_obj = EligibilityCheckResult(
         is_eligible=is_eligible,
-        verified_at=application.verified_at if save else datetime.utcnow(),
         eligible_by_grade=grade_eligible,
         eligible_by_history=history_eligible,
         eligible_by_documents=docs_eligible,
         errors=errors
     )
-    
     return result_obj
+
+
 
 
 async def get_eligibility_details(
@@ -320,41 +314,11 @@ async def get_eligibility_details(
     if not application:
         raise ValueError(f"Application {application_id} not found")
     
-    user = application.user
-    errors = []
-    
-    # 1. Check eligibility by grade
-    grade_eligible, grade_message = await check_eligibility_by_grade(user, application, db)
-    grade_check = {
-        "eligible": grade_eligible,
-        "message": grade_message
-    }
-    if not grade_eligible:
-        errors.append(grade_message)
-    
-    # 2. Check history
-    history_eligible, history_message, history_detail = await check_history(
-        application.user_id, user, application, db
-    )
-    if not history_eligible:
-        errors.append(history_message)
-    
-    # 3. Check documents
-    docs_eligible, docs_message, docs_detail = await check_documents(
-        application_id, application.stage_type, db
-    )
-    if not docs_eligible:
-        errors.append(docs_message)
-    
-    # Overall result
-    is_eligible = (grade_eligible and history_eligible and docs_eligible)
+    errors = application.verification_errors
+    error_list = [e.strip() for e in errors.split(";")] if errors else []
     
     return EligibilityDetailedResponse(
         application_id=application.id,
-        is_eligible=is_eligible,
-        verified_at=application.verified_at or datetime.utcnow(),
-        grade_check=grade_check,
-        history_check=history_detail,
-        document_check=docs_detail,
-        errors=errors
+        is_eligible=application.is_eligible if application.is_eligible is not None else False,
+        errors=error_list
     )

@@ -75,9 +75,24 @@ async def update_user(new_user : CreateUser , user_id : UUID, db : AsyncSessionL
             if field == "password" and value:
                 value = hash_password(value)
                 setattr(user, "hashed_password", value)
+            elif field == "laboratory_name":
+                lab_result = await db.execute(select(Laboratory).where(Laboratory.name == value))
+                lab = lab_result.scalar_one_or_none()
+                if not lab:
+                    lab = Laboratory(name=value)
+                    db.add(lab)
+                    await db.flush()
+                setattr(user, "laboratory_id", lab.id)
+            elif field == "ancientee":
+                setattr(user, "anciente", value)
+            elif field == "anciente":
+                pass # mapped below
             else:
                 setattr(user, field, value)
     
+    if "anciente" in update_data and "ancientee" not in update_data:
+        setattr(user, "anciente", update_data["anciente"])
+
     try:
         await db.commit()
         await db.refresh(user)
@@ -86,5 +101,3 @@ async def update_user(new_user : CreateUser , user_id : UUID, db : AsyncSessionL
         raise ValueError(f"Failed to update user: {str(e)}")
     
     return UserResponse.model_validate(user)
-     
-    

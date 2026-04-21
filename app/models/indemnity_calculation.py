@@ -19,5 +19,3 @@ class Idemnity(Base):
     
     application = relationship("Application", back_populates="idemnities")
     zone = relationship("Zone", back_populates="idemnities")
- 
-  

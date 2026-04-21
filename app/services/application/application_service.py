@@ -10,7 +10,9 @@ from app.models.application import Application
 from app.models.user import User
 from app.models.session import Session
 from app.models.enums import *
+from app.services.evaluation.criteria_service import calculate_score
 from app.services.application.eligibility_service import perform_eligibility_check
+from app.services.financial.indemnity_service import generate_indemnity_for_application
 from app.core.database import AsyncSessionLocal, get_db
 from app.services.auth_service_utils import (
     verify_chercheur_role,
@@ -284,6 +286,12 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
     application.submitted_at = datetime.today()
     
     try:
+        score = await calculate_score(db,user_id)
+        application.score = score
+        
+        # Automatically calculate indemnity budget for the submission
+        await generate_indemnity_for_application(application, db)
+        
         await db.commit()
         await db.refresh(application)
     except Exception as e:
@@ -304,12 +312,7 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
 
 
 async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest, db: AsyncSession, user_id: UUID):
-    """
-    Cancel an approved application by a researcher.
-
-    Authorization: chercheur only (own application)
-    Conditions: only approved applications can be cancelled by the applicant.
-    """
+    
     user = await verify_chercheur_role(user_id, db)
 
     application = await db.get(Application, app_id)
@@ -328,7 +331,7 @@ async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest,
     if not data.reason or not data.reason.strip():
         raise HTTPException(status_code=400, detail="Cancellation reason is required")
 
-    application.status = Status.CANCELLED
+    application.status = Status.CANCELLATION_REQUEST
     application.cancellation_reason = data.reason.strip()
     application.cancelled_at = datetime.now()
     application.cancellation_requested_by = user.id

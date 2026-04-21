@@ -53,8 +53,4 @@ async def calculate_score(db: AsyncSession, user_id: UUID) -> ScoreResponse:
     # Completed apps weighted more heavily than total apps
     score = (completed_applications * 10) + (total_applications * 5)
     
-    return ScoreResponse(
-        score=score,
-        completed=completed_applications,
-        applications=total_applications
-    )
+    return score

@@ -14,23 +14,17 @@ from app.services.auth_service_utils import (
 )
 
 
-async def calculate_budjet(idemnity: Idemnity, db: AsyncSessionLocal):
-   
-    
+async def calculate_budjet(idemnity: Idemnity, application, db: AsyncSessionLocal):
     zone = idemnity.zone
-    
-    if not zone :
+    if not zone:
        raise ValueError("zone not found for this idemnity")
     
+    if not application.start_date or not application.end_date:
+        raise ValueError("Application start_date and end_date must be set")
+        
+    days = (application.end_date - application.start_date).days + 1
     
-    
-    if isinstance(idemnity.date , int) :
-        days= idemnity.date
-    else :
-        days = idemnity.date.day
-    
-    
-    
+    # Budjet rates
     if zone.type == 1 :
         budjet_1_10 = 12000
         budjet_11_29_daily = 4000
@@ -45,10 +39,14 @@ async def calculate_budjet(idemnity: Idemnity, db: AsyncSessionLocal):
         budjet_multiple_month = 160000
         budjet_fraction_forfait = 160000
         budjet_fraction_daily = 5000
-     
-     
-     
-     
+    else:
+        # Default budget
+        budjet_1_10 = 10000
+        budjet_11_29_daily = 3000
+        budjet_11_29_forfait = 100000
+        budjet_multiple_month = 160000
+        budjet_fraction_forfait = 160000
+        budjet_fraction_daily = 5000
      
     if days <= 10 :
         budjet = budjet_1_10 * days
@@ -64,45 +62,40 @@ async def calculate_budjet(idemnity: Idemnity, db: AsyncSessionLocal):
         else :
             budjet = (n_months * budjet_multiple_month) + budjet_fraction_forfait + (fraction_days * budjet_fraction_daily)
     
-    
-    return budjet 
+    return budjet
 
 
-async def create_idemnity(idemnity : CreateIdemnity, user_id: UUID, db : AsyncSessionLocal ) -> IdemnityResonse:
+async def generate_indemnity_for_application(application, db: AsyncSessionLocal):
     """
-    Create a new indemnity record.
+    Produce indemnity budgets strictly bounded to an application instead of loose REST calls.
+    Allows passing application object directly during `submitDraft` sequence.
+    """
+    if not application.destination_country:
+        return None  # Can't calculate without a destination
+        
+    country_name = application.destination_country.value
     
-    Authorization: CS admin only (admin_dpgr or asistant_dpgr)
-    """
-    user = await verify_cs_admin_role(user_id, db)
-   
-    zone_result = await db.execute(select(Zone).where(Zone.name == idemnity.zone_name))
+    # Try finding exact zone by country name (assuming zones cover country names)
+    zone_result = await db.execute(select(Zone).where(Zone.name.ilike(f"%{country_name}%")))
     zone = zone_result.scalar_one_or_none()
     
     if not zone:
-        raise ValueError("Zone not found")
-    # Create model using the schema field 'idemnity_date'
-    # (schema uses 'idemnity_date' while model column is 'date')
-    new_idemnity = Idemnity(date = idemnity.idemnity_date, zone_id = zone.id)
+        # Create a default zone for this country to avoid failing
+        zone = Zone(name=country_name, type=1)
+        db.add(zone)
+        await db.flush()
+        
+    new_idemnity = Idemnity(date=application.start_date, zone_id=zone.id, app_id=application.id)
+    new_idemnity.zone = zone
     db.add(new_idemnity)
-    await db.commit()
-    await db.refresh(new_idemnity)
+    await db.flush()
     
-    budjet = await calculate_budjet(new_idemnity , db)
+    budjet = await calculate_budjet(new_idemnity, application, db)
     new_idemnity.budjet = budjet
-    db.add(new_idemnity)
-    await db.commit()
-    await db.refresh(new_idemnity)
+    application.calculated_fees = float(budjet)
     
-    # Build response dict so Pydantic can map model attributes to schema field names
-    resp = {
-        "id": new_idemnity.id,
-        "idemnity_date": new_idemnity.date,
-        "zone_id": new_idemnity.zone_id,
-        "budjet": new_idemnity.budjet,
-    }
-
-    return IdemnityResonse.model_validate(resp)
+    await db.flush()
+    return new_idemnity
 
 
 async def delete_idemnity(idemnity_id: str, user_id: UUID, db: AsyncSessionLocal) -> bool:

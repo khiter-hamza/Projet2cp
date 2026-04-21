@@ -19,9 +19,11 @@ class UserGrade(str, enum.Enum):
 class Status(str, enum.Enum):
     DRAFT = "draft"
     SUBMITTED = "submitted"
-    CS_PREPARATION = "cs_preparation"
     APPROVED = "approved"
     COMPLETED = "completed"
+    CANCELLATION_REQUEST="cancellation_request"
+    CORRECTION_NEEDED="correction_needed"
+    EXPIRED="expired"
     CLOSED = "closed"
     REJECTED = "rejected"
     CANCELLED = "cancelled"
@@ -44,9 +46,8 @@ class StageType(str,enum.Enum):
     sejour_scientifique = "sejour_scientifique" 
 
 class CSDecision(str,enum.Enum):
-    approuve = "approuve"
-    rejete = "rejete"
-    #en_attente ="en_attente"
+    approved = "approved"
+    rejected = "rejected"
 
 
 class Documents_type(str, enum.Enum):

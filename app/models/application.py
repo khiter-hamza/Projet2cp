@@ -26,7 +26,6 @@ class Application(Base):
     score = Column(Float)
     
     is_eligible = Column(Boolean,nullable=True,index=True)
-    verified_at = Column(DateTime, nullable=True)
     verification_errors = Column(Text, nullable=True)  # Comma-separated list of errors
     
     cs_decision = Column(Enum(CSDecision), nullable=True, index=True)

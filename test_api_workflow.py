@@ -306,7 +306,7 @@ async def get_documents(client, token, app_id):
     
     try:
         response = await client.get(
-            f"{BASE_URL}/applications/{app_id}/documments",
+            f"{BASE_URL}/applications/{app_id}/documents",
             headers=headers
         )
         response.raise_for_status()
@@ -323,27 +323,6 @@ async def get_documents(client, token, app_id):
 # ============================================================================
 # 5. ELIGIBILITY & EVALUATION
 # ============================================================================
-
-async def check_eligibility(client, token, app_id):
-    """Perform eligibility check on an application"""
-    print(f"\n[7. CHECK ELIGIBILITY] Application ID: {app_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.post(
-            f"{BASE_URL}/applications/{app_id}/check-eligibility",
-            headers=headers
-        )
-        response.raise_for_status()
-        result = response.json()
-        print(f"✓ Eligibility check completed:")
-        print(f"  Is Eligible: {result.get('is_eligible')}")
-        print(f"  Errors: {result.get('errors', [])}")
-        return result
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Eligibility check failed: {e.response.status_code} - {e.response.text}")
-        return None
 
 
 async def get_eligibility_details(client, token, app_id):
@@ -367,28 +346,6 @@ async def get_eligibility_details(client, token, app_id):
         print(f"✗ Get eligibility details failed: {e.response.status_code} - {e.response.text}")
         return None
 
-
-async def get_user_score(client, token, user_id):
-    """Get the evaluation score for a user"""
-    print(f"\n[8. GET USER SCORE] User ID: {user_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.get(
-            f"{BASE_URL}/evaluation/users/{user_id}/score",
-            headers=headers
-        )
-        response.raise_for_status()
-        score = response.json()
-        print(f"✓ User score retrieved:")
-        print(f"  Total Score: {score.get('total_score')}")
-        print(f"  Completed Applications: {score.get('completed_applications_count')}")
-        print(f"  Total Applications: {score.get('total_applications_count')}")
-        return score
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Get user score failed: {e.response.status_code} - {e.response.text}")
-        return None
 
 
 # ============================================================================
@@ -706,15 +663,10 @@ async def main():
         print("PHASE 5: ELIGIBILITY & EVALUATION")
         print("=" * 80)
         
-        # Check eligibility
-        eligibility = await check_eligibility(client, researcher_token, application_id)
         
         # Get eligibility details
         eligibility_details = await get_eligibility_details(client, researcher_token, application_id)
         
-        # Get user score
-        if researcher and researcher.get("id"):
-            score = await get_user_score(client, researcher_token, researcher.get("id"))
         
         # ===== PHASE 6: APPLICATION SUBMISSION =====
         print("\n" + "=" * 80)
@@ -748,8 +700,6 @@ async def main():
             print("PHASE 8: CS WORKFLOW (Admin Operations)")
             print("=" * 80)
             
-            # Prepare CS deliberation
-            cs_prep = await prepare_cs_deliberation(client, admin_token, session_id)
             
             # Get CS dashboard
             cs_dashboard = await get_cs_dashboard(client, admin_token, session_id)

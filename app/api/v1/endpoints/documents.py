@@ -60,12 +60,12 @@ async def upload_document(    application_id: uuid.UUID,    document_type: Docum
     return new_document
 
 
-@router.get('/applications/{application_id}/documments',response_model=list[DocumentResponse])
-async def get_documments(application_id:uuid.UUID,db:AsyncSession=Depends(get_db),user=Depends(get_current_user)):
+@router.get('/applications/{application_id}/documents',response_model=list[DocumentResponse])
+async def get_documents(application_id:uuid.UUID,db:AsyncSession=Depends(get_db),user=Depends(get_current_user)):
    try:
        res=await db.execute(select(Document).where(Document.application_id==application_id ,Document.user_id==user.id).order_by(Document.uploaded_at.desc()))
        if not res:
-        raise HTTPException(status_code=404,detail='No documment found with this demmende_id')
+        raise HTTPException(status_code=404,detail='No document found with this demmende_id')
        return res.scalars().all() 
    except Exception as e:
       print(e)
@@ -76,7 +76,7 @@ async def delete_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:Use
    res=await db.execute(select(Document).where(Document.id==idd,Document.user_id==user.id))
    document=res.scalar_one_or_none()
    if not document:
-      raise HTTPException(status_code=404,detail='documment not found')
+      raise HTTPException(status_code=404,detail='document not found')
    if document.document_type == Documents_type.report:# this set the stage_report_submitted to true and set the stage_report_id to the new document id and set the stage_report_submitted_at to the current date and time this is for the front end to know that the report is submitted and it can show the download button for the report and it can also show the date of submission of the report
        app=await db.get(Application,document.application_id)
        app.stage_report_submitted = False
@@ -98,7 +98,7 @@ async def get_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:User=D
    res=await db.execute(select(Document).where(Document.id==idd,Document.user_id==user.id))
    document=res.scalar_one_or_none()
    if not document:
-      raise HTTPException(status_code=404,detail='documment not found')
+      raise HTTPException(status_code=404,detail='document not found')
    return document
 
 
@@ -108,7 +108,7 @@ async def download_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:U
    res=await db.execute(select(Document).where(Document.id==idd,Document.user_id==user.id))
    document=res.scalar_one_or_none()
    if not document:
-      raise HTTPException(status_code=404,detail='documment not found')
+      raise HTTPException(status_code=404,detail='document not found')
    if not os.path.exists(document.file_path):
         raise HTTPException(status_code=404, detail="file missing on server")
    return FileResponse(path=document.file_path, filename=document.file_name)
@@ -116,7 +116,7 @@ async def download_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:U
 
 
 
-@router.get('/applications/{application_id}/documments/downloads')
+@router.get('/applications/{application_id}/documents/downloads')
 async def downlods_demende_documents(application_id:uuid.UUID,db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
    try:
        res=await db.execute(select(Document).options(
@@ -124,7 +124,7 @@ async def downlods_demende_documents(application_id:uuid.UUID,db:AsyncSession=De
     ).where(Document.application_id==application_id ,Document.user_id==user.id).order_by(Document.uploaded_at.desc()))
        documents=res.scalars().all()
        if not documents:
-        raise HTTPException(status_code=404,detail='No documment found with this demmende_id')
+        raise HTTPException(status_code=404,detail='No document found with this demmende_id')
        zip_path = f"/tmp/{application_id}_{uuid.uuid4()}.zip"
 
        with zipfile.ZipFile(zip_path, "w") as zipf:
