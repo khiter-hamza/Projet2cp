@@ -26,9 +26,14 @@ async def create_session(
         raise HTTPException(status_code=400, detail="start_date must be before end_date")
     if data.end_date < date.today():
         raise HTTPException(status_code=400, detail="end_date must be in the future")
-
-    await db.execute(update(Session).values(is_active=False))
-
+    try:    
+        await db.execute(update(Session).values(is_active=False,is_open=False))
+        #applications_to_be_removed 
+        #application_to_be_expired
+        #HAMAIDI IMPLEMENT THIS
+        await db.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"internal server error {str(e)}")
     new_session = Session(
         name=data.name,
         academic_year=data.academic_year,

@@ -459,6 +459,83 @@ async def main():
         })
         report("POST /applications/{id}/cancel", status == 200, f"status={status}, err={err}")
 
+        # PHASE 14: CANCELLATION CONFIRMATION (admin role)
+        print(f"\n{'='*60}")
+        print("PHASE 14: CANCELLATION CONFIRMATION (admin_dpgr)")
+        print(f"{'='*60}")
+
+        result, status, err = await api(client, "post", f"/applications/{application_id}/cancel_confirm", token=admin_token)
+        report("POST /applications/{id}/cancel_confirm", status == 200, f"status={status}")
+        
+        # Verify status is now CANCELLED
+        result, status, err = await api(client, "get", f"/applications/{application_id}", token=researcher_token)
+        report("Verify status is CANCELLED", result.get("status") == "cancelled" if result else False, f"status={result.get('status') if result else 'N/A'}")
+
+        # =====================================================================
+        # PHASE 15: COMPLETION & CLOSING (Full Lifecycle)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 15: COMPLETION & CLOSING (full lifecycle)")
+        print(f"{'='*60}")
+
+        # 1. Create a second application to test completion
+        tomorrow = date.today() + timedelta(days=10)
+        end_date = tomorrow + timedelta(days=7)
+        result, status, err = await api(client, "post", "/applications/", token=researcher_token, json_data={
+            "destination_country": "allemagne",
+            "destination_city": "Berlin",
+            "host_institution": "TU Berlin",
+            "scientific_objective": "Robotics research",
+            "start_date": str(tomorrow),
+            "end_date": str(end_date),
+        })
+        app2_id = result.get("id") if result else None
+        report("Create 2nd application", app2_id is not None, f"id={app2_id}")
+
+        if app2_id:
+            # 2. Upload minimum required docs for submission
+            for doc_type in ["cv", "invitation", "programme", "passport", "accord_labo"]:
+                test_file_doc = Path(UPLOAD_DIR) / f"app2_{doc_type}.pdf"
+                test_file_doc.write_text(f"App2 {doc_type} content")
+                with open(test_file_doc, "rb") as f:
+                    await api(client, "post", f"/applications/{app2_id}/documents", token=researcher_token, 
+                             files={"file": (f"app2_{doc_type}.pdf", f, "application/pdf")},
+                             data={"document_type": doc_type})
+            
+            # 3. Submit
+            await api(client, "post", f"/applications/{app2_id}/submit", token=researcher_token, json_data={
+                "destination_country": "allemagne", "destination_city": "Berlin", "host_institution": "TU Berlin",
+                "scientific_objective": "Robotics research",
+            })
+            
+            # 4. CS Approve
+            await api(client, "post", f"/cs/deliberate/{app2_id}", token=admin_token, json_data={
+                "decision": "approved", "notes": "Approved for completion test"
+            })
+            
+            # 5. Researcher uploads report -> Should trigger Status.COMPLETED
+            test_report = Path(UPLOAD_DIR) / "app2_report.pdf"
+            test_report.write_text("This is the final stay report.")
+            with open(test_report, "rb") as f:
+                result, status, err = await api(client, "post", f"/applications/{app2_id}/documents",
+                    token=researcher_token,
+                    files={"file": ("report.pdf", f, "application/pdf")},
+                    data={"document_type": "report"}
+                )
+            report("Upload Report (triggers COMPLETED)", status == 200, f"status={status}")
+
+            # 6. Verify status is COMPLETED
+            result, status, err = await api(client, "get", f"/applications/{app2_id}", token=researcher_token)
+            report("Verify status is COMPLETED", result.get("status") == "completed" if result else False, f"status={result.get('status') if result else 'N/A'}")
+
+            # 7. Admin closes application
+            result, status, err = await api(client, "post", f"/applications/{app2_id}/close_application", token=admin_token)
+            report("POST /applications/{id}/close_application", status == 200, f"status={status}")
+
+            # 8. Verify status is CLOSED
+            result, status, err = await api(client, "get", f"/applications/{app2_id}", token=researcher_token)
+            report("Verify status is CLOSED", result.get("status") == "closed" if result else False, f"status={result.get('status') if result else 'N/A'}")
+
         # =====================================================================
         # SUMMARY
         # =====================================================================

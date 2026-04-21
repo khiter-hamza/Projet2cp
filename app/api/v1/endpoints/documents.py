@@ -10,7 +10,7 @@ from sqlalchemy.orm import joinedload
 from app.core.database import get_db
 from app.models.document import Document
 from app.models.application import Application
-from app.models.enums import Documents_type
+from app.models.enums import Documents_type, Status
 from app.schemas.document import DocumentResponse
 from app.core.dependencies import get_current_user
 from app.models.user import User
@@ -50,12 +50,20 @@ async def upload_document(    application_id: uuid.UUID,    document_type: Docum
     db.add(new_document)
     await db.commit()
     await db.refresh(new_document)
-    if document_type == Documents_type.report:# this set the stage_report_submitted to true and set the stage_report_id to the new document id and set the stage_report_submitted_at to the current date and time this is for the front end to know that the report is submitted and it can show the download button for the report and it can also show the date of submission of the report
-       app=await db.get(Application,application_id)
-       app.stage_report_submitted = True
-       app.stage_report_submitted_at = new_document.uploaded_at
-       app.stage_report_id = new_document.id
-       await db.commit()
+    if document_type == Documents_type.report:
+        app = await db.get(Application, application_id)
+        if app:
+            app.stage_report_submitted = True
+            now = datetime.utcnow()
+            app.stage_report_submitted_at = now
+            app.stage_report_id = new_document.id
+            
+            # Transition to COMPLETED if it was APPROVED
+            if app.status == Status.APPROVED:
+                app.status = Status.COMPLETED
+                app.completed_at = now
+                
+            await db.commit()
 
     return new_document
 

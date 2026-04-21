@@ -1,3 +1,4 @@
+from app.schemas.application import ApplicationResponse
 from fastapi import HTTPException, Response , Depends
 from uuid import UUID
 from datetime import datetime, date
@@ -34,6 +35,8 @@ async def getCurrentApplication(db: AsyncSession, user_id: UUID):
         select(Application)
         .options(selectinload(Application.documents))
         .where(Application.user_id == user_id, Application.session_id == current_session.id)
+        .order_by(desc(Application.created_at))
+        .limit(1)
     )
     application = result.scalar_one_or_none()
     if not application:
@@ -81,17 +84,16 @@ async def createDraft(data: ApplicationUpsert, db: AsyncSession, user_id: UUID):
     current_session = await get_current_session(db)
     if not current_session:
         raise HTTPException(status_code=400, detail="No active session available for creating applications")
-    
+
     result = await db.execute(
         select(Application)
         .where(Application.user_id == user_id)
-        .where(Application.status == Status.DRAFT)
         .where(Application.session_id == current_session.id)
     )
     existing_draft = result.scalar_one_or_none()
     
     if existing_draft:
-        raise HTTPException(status_code=409, detail="A draft already exists for this user in the current session")
+        raise HTTPException(status_code=409, detail="An application already exists for this user in the current session")
     
     application = Application(user_id=user.id, session_id=current_session.id, **data.model_dump())
     
@@ -180,9 +182,9 @@ async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: Appl
     query = select(Application).join(Application.user).options(selectinload(Application.documents))  # Join for user filters and load documents
     
     # Default filter: current session
-    current_session = await get_current_session(db)
-    if current_session:
-        query = query.where(Application.session_id == current_session.id)
+    #current_session = await get_current_session(db)
+    #if current_session:
+    #    query = query.where(Application.session_id == current_session.id)
     
     # Chercheur can only see own applications
     if user.role == UserRole.chercheur:
@@ -322,7 +324,7 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
         return {
             "message": "Application submitted successfully",
             "id": str(application.id),
-            "eligibility_status": "eligible" if eligibility_result.is_eligible else "rejected",
+            "eligibility_status": "eligible" if eligibility_result.is_eligible else "non eligible",
             "verification_errors": eligibility_result.errors if eligibility_result.errors else None
         }
     except Exception as e:
@@ -351,9 +353,6 @@ async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest,
 
     application.status = Status.CANCELLATION_REQUEST
     application.cancellation_reason = data.reason.strip()
-    application.cancelled_at = datetime.now()
-    application.cancellation_requested_by = user.id
-    application.closed_at = datetime.now()
 
     try:
         await db.commit()
@@ -362,20 +361,20 @@ async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest,
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-    message = f"Application {application.id} has been cancelled by the researcher. Reason: {application.cancellation_reason}"
+    message = f"Cancellation request for application {application.id} has been submitted. Reason: {application.cancellation_reason}"
     try:
         await create_notification(
             db,
             user.id,
-            "Your application has been cancelled",
-            message,
+            "Cancellation Request Submitted",
+            "Your cancellation request has been submitted and is pending administrative review.",
             NotificationType.status_change,
             demande_id=application.id,
         )
         await notify_admins(
             db,
-            "Researcher cancelled an approved application",
-            message,
+            "New Cancellation Request",
+            f"Researcher {user.username} has requested to cancel an approved application ({application.id}).",
             NotificationType.status_change,
             demande_id=application.id,
         )
@@ -390,6 +389,132 @@ async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest,
     application_with_docs = result.scalar_one()
     return ApplicationResponse.model_validate(application_with_docs)
 
+
+async def cancel_application_confirm(app_id: UUID, db: AsyncSession, user_id: UUID):
+    """Confirm a cancellation request (CS Admin only)"""
+    await verify_cs_admin_role(user_id, db)
+    
+    # Fetch with documents to ensure response serialization works
+    result = await db.execute(
+        select(Application)
+        .options(selectinload(Application.documents))
+        .where(Application.id == app_id)
+    )
+    application = result.scalar_one_or_none()
+    
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+        
+    if application.status != Status.CANCELLATION_REQUEST:
+        raise HTTPException(
+            status_code=400, 
+            detail="Application must have a cancellation request before it can be confirmed"
+        )
+        
+    application.status = Status.CANCELLED
+    application.cancelled_at = datetime.now()
+    application.closed_at = datetime.now()
+    application.action_confirmation_by_id = user_id
+    
+    try:
+        await db.commit()
+        await db.refresh(application)
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    # Reload with documents for response serialization (refresh might have cleared them)
+    result = await db.execute(
+        select(Application)
+        .options(selectinload(Application.documents))
+        .where(Application.id == application.id)
+    )
+    application_with_docs = result.scalar_one()
+    
+    # Notify researcher
+    try:
+        await create_notification(
+            db,
+            application_with_docs.user_id,
+            "Cancellation Confirmed",
+            f"Your application {application_with_docs.id} cancellation has been confirmed.",
+            NotificationType.status_change,
+            demande_id=application_with_docs.id,
+        )
+        await notify_admins(
+            db,
+            "Application Cancelled",
+            f"Application {application_with_docs.id} cancellation request has been confirmed.",
+            NotificationType.status_change,
+            demande_id=application_with_docs.id,
+        )
+    except Exception:
+        pass
+
+    return ApplicationResponse.model_validate(application_with_docs)
+
+
+async def close_application(app_id: UUID, db: AsyncSession, user_id: UUID):
+    await verify_cs_admin_role(user_id, db)
+    
+    # Fetch with documents to ensure response serialization works
+    result = await db.execute(
+        select(Application)
+        .options(selectinload(Application.documents))
+        .where(Application.id == app_id)
+    )
+    application = result.scalar_one_or_none()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+        
+    if application.status != Status.COMPLETED:
+        raise HTTPException(
+            status_code=400, 
+            detail="Application must have been COMPLETED before it can be closed"
+        )
+        
+    application.status = Status.CLOSED
+    application.closed_at = datetime.now()
+    application.action_confirmation_by_id = user_id
+
+    try:
+        await db.commit()
+        await db.refresh(application)
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    # Reload with documents for response serialization (refresh might have cleared them)
+    result = await db.execute(
+        select(Application)
+        .options(selectinload(Application.documents))
+        .where(Application.id == application.id)
+    )
+    application_with_docs = result.scalar_one()
+    
+    # Notify researcher
+    try:
+        await create_notification(
+            db,
+            application_with_docs.user_id,
+            "Application Closed",
+            f"Your application {application_with_docs.id} has been closed.",
+            NotificationType.status_change,
+            demande_id=application_with_docs.id,
+        )
+        await notify_admins(
+            db,
+            "Application Closed",
+            f"Application {application_with_docs.id} has been closed.",
+            NotificationType.status_change,
+            demande_id=application_with_docs.id,
+        )
+    except Exception:
+        pass
+
+    return ApplicationResponse.model_validate(application_with_docs)
+
+    
 
 async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
     """
@@ -429,7 +554,7 @@ async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
 
 async def get_current_session(db: AsyncSession):
     result = await db.execute(
-        select(Session).where(Session.is_open == True).where(Session.end_date >= date.today())
+        select(Session).where(Session.is_active == True).where(Session.end_date >= date.today())
     )
     session = result.scalar_one_or_none()
     return session

@@ -24,6 +24,8 @@ async def get_researcher_current_application(user_id: str, db: AsyncSession) -> 
         .options(selectinload(Application.documents))
         .where(Application.user_id == user.id)
         .where(Application.session_id == current_session.id)
+        .order_by(desc(Application.created_at))
+        .limit(1)
     )
     application = result.scalar_one_or_none()
     return ApplicationResponse.model_validate(application) if application else None
@@ -48,6 +50,8 @@ async def get_researcher_dashboard(user_id: str, db: AsyncSession):
         .options(selectinload(Application.documents))
         .where(Application.user_id == user.id)
         .where(Application.session_id == current_session.id)
+        .order_by(desc(Application.created_at))
+        .limit(1)
     )
     application = result.scalar_one_or_none()
     

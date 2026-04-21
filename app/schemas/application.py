@@ -8,29 +8,51 @@ from app.schemas.document import DocumentResponse
 
 #all models has a relation with application
 
+# COMPLETED_AT CAN BE REMOVED
+
 class ApplicationResponse(BaseModel):
-    """Réponse complète"""
+    """Réponse complète d'une candidature"""
     id: UUID
     user_id: UUID
+    session_id: UUID | None = None
     status: Status
     stage_type: StageType | None = None
-    start_date: datetime | None = None
-    end_date: datetime | None = None
+    start_date: date | None = None
+    end_date: date | None = None
     destination_country: Countries | None = None
     destination_city: str | None = None
     host_institution: str | None = None
     scientific_objective: str | None = None
     score: float | None = None
     is_eligible: bool | None = None
-    verified_at: datetime | None = None
     verification_errors: str | None = None
     cs_decision: CSDecision | None = None
     rejection_reason: str | None = None
-    cancellation_reason: str | None = None
-    cancelled_at: datetime | None = None
+    
+    # Financial
     calculated_fees: float | None = None
+    
+    # Document tracking
+    stage_report_id: UUID | None = None
+    stage_report_submitted: bool = False
+    stage_report_submitted_at: datetime | None = None
+    attestation_id: UUID | None = None
+    attestation_submitted: bool = False
+    attestation_submitted_at: datetime | None = None
+
+    # Cancellation
+    cancellation_reason: str | None = None
+    action_confirmation_by_id: UUID | None = None
+    cancelled_at: datetime | None = None
+    
+    # Timestamps
     created_at: datetime
     submitted_at: datetime | None = None
+    approved_at: datetime | None = None
+    rejected_at: datetime | None = None
+    completed_at: datetime | None = None
+    closed_at: datetime | None = None
+    
     documents: List[DocumentResponse] = []
     
     class Config:
@@ -57,13 +79,13 @@ class ApplicationUpsert(BaseModel):
         from_attributes = True
 
 class ApplicationSubmission(BaseModel):
-    """Réponse complète"""
+    """Schema de validation avant soumission"""
     id: UUID
     user_id: UUID
     status: Status
     stage_type: StageType 
-    start_date: datetime 
-    end_date: datetime 
+    start_date: date 
+    end_date: date 
     destination_country: Countries 
     destination_city: str 
     host_institution: str 
@@ -89,7 +111,10 @@ class ApplicationFilterParams(BaseModel):
         "zone",
         "user_grade",
         "duration_days",
-        "session_id"
+        "session_id",
+        "score",
+        "is_eligible",
+        "calculated_fees"
     ] = "submitted_at"
     sort_order: Literal["asc", "desc"] = "desc"
     
@@ -116,6 +141,7 @@ def get_filter_params(
         "created_at",
         "approved_at",
         "rejected_at",
+        "status",
         "stage_type",
         "destination_country",
         "host_institution",
@@ -123,7 +149,10 @@ def get_filter_params(
         "zone",
         "user_grade",
         "duration_days",
-        "session_id"
+        "session_id",
+        "score",
+        "is_eligible",
+        "calculated_fees"
     ] = Query("created_at"),
     sort_order: Literal["asc", "desc"] = Query("desc"),
     status: Status | None = Query(None),

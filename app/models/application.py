@@ -45,23 +45,23 @@ class Application(Base):
     
     
     cancellation_reason = Column(Text)
-    cancellation_requested_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    action_confirmation_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     created_at = Column(DateTime, nullable=False, default=datetime.today, index=True)
     submitted_at = Column(DateTime, index=True)
     approved_at = Column(DateTime, index=True)
     rejected_at = Column(DateTime, index=True)
-    started_at = Column(DateTime)
-    completed_at = Column(DateTime)
+    completed_at = Column(DateTime)#can be removed
     closed_at = Column(DateTime)
     cancelled_at = Column(DateTime)
     user = relationship(
-    "User",
-    foreign_keys=[user_id],
-    back_populates="applications"
-)
-    cancellation_requested_by_user = relationship("User", foreign_keys=[cancellation_requested_by])
-    #documents = relationship("Document", back_populates="application")
+        "User",
+        foreign_keys=[user_id],
+        back_populates="applications"
+    )
+    action_confirmation_by = relationship("User", foreign_keys=[action_confirmation_by_id])
+
+
     session = relationship("Session", back_populates="applications")
     idemnities = relationship("Idemnity" , back_populates="application")
     documents = relationship(
