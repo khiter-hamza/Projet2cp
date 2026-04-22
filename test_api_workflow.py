@@ -5,7 +5,7 @@ Tests all endpoints in the correct order for a full application lifecycle.
 
 Roles needed:
 - chercheur (researcher): Creates and submits applications
-- asistant_dpgr (assistant): Manages sessions
+- assistant_dpgr (assistant): Manages sessions
 - admin_dpgr (admin): CS deliberation decisions
 """
 
@@ -137,11 +137,11 @@ async def main():
         })
         report("POST /auth/register (researcher)", status in [200, 201], f"status={status}")
 
-        # Register assistant (asistant_dpgr) - manages sessions
+        # Register assistant (assistant_dpgr) - manages sessions
         result, status, err = await api(client, "post", "/auth/register", json_data={
             "email": ASSISTANT_EMAIL, "username": ASSISTANT_USERNAME,
             "lastname": ASSISTANT_LASTNAME, "password": ASSISTANT_PASSWORD,
-            "role": "asistant_dpgr", "grade": "professeur", "anciente": 10,
+            "role": "assistant_dpgr", "grade": "professeur", "anciente": 10,
             "laboratory_name": "Admin Office", "ancientee": 0
         })
         report("POST /auth/register (assistant)", status in [200, 201], f"status={status}")
@@ -187,7 +187,7 @@ async def main():
         # PHASE 3: SESSION MANAGEMENT (assistant role)
         # =====================================================================
         print(f"\n{'='*60}")
-        print("PHASE 3: SESSION MANAGEMENT (asistant_dpgr)")
+        print("PHASE 3: SESSION MANAGEMENT (assistant_dpgr)")
         print(f"{'='*60}")
 
         # Check for active session first

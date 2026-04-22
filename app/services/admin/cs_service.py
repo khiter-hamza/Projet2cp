@@ -102,7 +102,7 @@ async def reject_application(
     """
     CS rejects application.
     
-    Requires: CS admin access (admin_dpgr or asistant_dpgr)
+    Requires: CS admin access (admin_dpgr or assistant_dpgr)
     
     Actions:
     1. Verify user is CS admin
@@ -189,7 +189,7 @@ async def get_cs_decision_history(
     """
     Get CS decision statistics and history.
     
-    Requires: CS admin access (admin_dpgr or asistant_dpgr)
+    Requires: CS admin access (admin_dpgr or assistant_dpgr)
     
     Args:
         session_id: Optional filter by session
@@ -230,7 +230,7 @@ async def get_cs_dashboard_applications(
     """
     Get CS dashboard data with all CS_PREPARATION applications.
     
-    Requires: CS admin access (admin_dpgr or asistant_dpgr)
+    Requires: CS admin access (admin_dpgr or assistant_dpgr)
     
     Args:
         session_id: Optional filter by session

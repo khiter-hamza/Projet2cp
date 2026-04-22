@@ -45,7 +45,7 @@ async def cancel_application_endpoint(
 ):
     return await cancel_application(app_id, data, db, user_id)
 
-@router.post("/{app_id}/cancel_confirm", response_model=ApplicationResponse)
+@router.post("/{app_id}/cancel_confirm")
 async def cancel_application_confirm_endpoint(
     app_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -53,7 +53,7 @@ async def cancel_application_confirm_endpoint(
 ):
     return await cancel_application_confirm(app_id, db, user_id)
 
-@router.post("/{app_id}/close_application")
+@router.post("/{app_id}/close_application", response_model=ApplicationResponse)
 async def close_application_endpoint(app_id: UUID, db: Annotated[AsyncSession, Depends(get_db)], user_id: Annotated[UUID, Depends(get_current_user_id)]):
     return await close_application(app_id, db, user_id)
 
