@@ -11,6 +11,11 @@ from app.core.dependencies import get_current_user_id
 
 router = APIRouter()
 
+@router.get("/current", response_model=ApplicationResponse)
+async def get_current_application_endpoint(db: Annotated[AsyncSession, Depends(get_db)], user_id: Annotated[UUID, Depends(get_current_user_id)]):
+    return await getCurrentApplication(db, user_id)
+
+
 @router.get("/{id}", response_model=ApplicationResponse)
 async def get_User_application_endpoint(id: UUID, db: Annotated[AsyncSession, Depends(get_db)], user_id: Annotated[UUID, Depends(get_current_user_id)]):
     return await getUserApplication(id, user_id, db)
@@ -40,6 +45,39 @@ async def cancel_application_endpoint(
 ):
     return await cancel_application(app_id, data, db, user_id)
 
+@router.post("/{app_id}/cancel_confirm")
+async def cancel_application_confirm_endpoint(
+    app_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user_id: Annotated[UUID, Depends(get_current_user_id)]
+):
+    return await cancel_application_confirm(app_id, db, user_id)
+
+@router.post("/{app_id}/close_application", response_model=ApplicationResponse)
+async def close_application_endpoint(app_id: UUID, db: Annotated[AsyncSession, Depends(get_db)], user_id: Annotated[UUID, Depends(get_current_user_id)]):
+    return await close_application(app_id, db, user_id)
+
 @router.delete("/{app_id}", status_code=204)
 async def delete_draft_endpoint(app_id: UUID, db: Annotated[AsyncSession, Depends(get_db)], user_id: Annotated[UUID, Depends(get_current_user_id)]):
     return await deleteDraft(app_id, db, user_id)
+
+
+
+@router.post("/{app_id}/flag")
+async def flag_endpoint(app_id: UUID ,reason:str, db:Annotated[AsyncSession, Depends(get_db)], user_id:Annotated[UUID,Depends(get_current_user_id)]):
+    return await flag(app_id,db,reason=reason,user_id=user_id)
+
+#i need it after
+"""    if document_type == Documents_type.report:
+        app = await db.get(Application, application_id)
+        if app:
+            app.stage_report_submitted = True
+            now = datetime.utcnow()
+            app.stage_report_submitted_at = now
+            app.stage_report_id = new_document.id
+            
+            # Transition to COMPLETED if it was APPROVED
+            if app.status == Status.APPROVED:
+                app.status = Status.COMPLETED
+                app.completed_at = now 
+"""

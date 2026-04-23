@@ -1,5 +1,6 @@
 
 
+from app.schemas.indemnity import CreateZone
 from app.models.indemnity_calculation import Idemnity
 from app.models.zone import Zone
 from app.core.database import AsyncSessionLocal
@@ -14,95 +15,90 @@ from app.services.auth_service_utils import (
 )
 
 
-async def calculate_budjet(idemnity: Idemnity, db: AsyncSessionLocal):
-   
-    
+async def calculate_budget(idemnity: Idemnity, application, db: AsyncSessionLocal):
     zone = idemnity.zone
-    
-    if not zone :
+    if not zone:
        raise ValueError("zone not found for this idemnity")
     
+    if not application.start_date or not application.end_date:
+        raise ValueError("Application start_date and end_date must be set")
+        
+    days = (application.end_date - application.start_date).days + 1
     
-    
-    if isinstance(idemnity.date , int) :
-        days= idemnity.date
-    else :
-        days = idemnity.date.day
-    
-    
-    
+    # Budget rates
     if zone.type == 1 :
-        budjet_1_10 = 12000
-        budjet_11_29_daily = 4000
-        budjet_11_29_forfait = 120000
-        budjet_multiple_month = 200000
-        budjet_fraction_forfait = 200000
-        budjet_fraction_daily = 6000
+        budget_1_10 = 12000
+        budget_11_29_daily = 4000
+        budget_11_29_forfait = 120000
+        budget_multiple_month = 200000
+        budget_fraction_forfait = 200000
+        budget_fraction_daily = 6000
     elif zone.type == 2 :
-        budjet_1_10 = 10000
-        budjet_11_29_daily = 3000
-        budjet_11_29_forfait = 100000
-        budjet_multiple_month = 160000
-        budjet_fraction_forfait = 160000
-        budjet_fraction_daily = 5000
-     
-     
-     
-     
+        budget_1_10 = 10000
+        budget_11_29_daily = 3000
+        budget_11_29_forfait = 100000
+        budget_multiple_month = 160000
+        budget_fraction_forfait = 160000
+        budget_fraction_daily = 5000
+    else:
+        # Default budget
+        budget_1_10 = 10000
+        budget_11_29_daily = 3000
+        budget_11_29_forfait = 100000
+        budget_multiple_month = 160000
+        budget_fraction_forfait = 160000
+        budget_fraction_daily = 5000
      
     if days <= 10 :
-        budjet = budjet_1_10 * days
+        budget = budget_1_10 * days
     elif days <= 29 :
         extra_days = days - 10
-        budjet = budjet_11_29_forfait + (extra_days * budjet_11_29_daily)
+        budget = budget_11_29_forfait + (extra_days * budget_11_29_daily)
     else :
         n_months = days // 30
         fraction_days = days % 30
         
         if fraction_days == 0 :
-            budjet = n_months * budjet_multiple_month
+            budget = n_months * budget_multiple_month
         else :
-            budjet = (n_months * budjet_multiple_month) + budjet_fraction_forfait + (fraction_days * budjet_fraction_daily)
+            budget = (n_months * budget_multiple_month) + budget_fraction_forfait + (fraction_days * budget_fraction_daily)
     
-    
-    return budjet 
+    return budget
 
 
-async def create_idemnity(idemnity : CreateIdemnity, user_id: UUID, db : AsyncSessionLocal ) -> IdemnityResonse:
+async def generate_indemnity_for_application(application, db: AsyncSessionLocal):
     """
-    Create a new indemnity record.
+    Produce indemnity budgets strictly bounded to an application instead of loose REST calls.
+    Allows passing application object directly during `submitDraft` sequence.
+    """
+    if not application.destination_country:
+        return None  # Can't calculate without a destination
+        
+    country_name = str(application.destination_country)
+
     
-    Authorization: CS admin only (admin_dpgr or asistant_dpgr)
-    """
-    user = await verify_cs_admin_role(user_id, db)
-   
-    zone_result = await db.execute(select(Zone).where(Zone.name == idemnity.zone_name))
+    # Try finding exact zone by country name (assuming zones cover country names)
+    zone_result = await db.execute(select(Zone).where(Zone.name.ilike(f"%{country_name}%")))
     zone = zone_result.scalar_one_or_none()
     
     if not zone:
-        raise ValueError("Zone not found")
-    # Create model using the schema field 'idemnity_date'
-    # (schema uses 'idemnity_date' while model column is 'date')
-    new_idemnity = Idemnity(date = idemnity.idemnity_date, zone_id = zone.id)
-    db.add(new_idemnity)
-    await db.commit()
-    await db.refresh(new_idemnity)
+        # Auto-create zone as type 2 (all remaining countries) directly in session
+        # Cannot use create_zone() here as it requires super_admin auth
+        zone = Zone(name=country_name, type=2)
+        db.add(zone)
+        await db.flush()
     
-    budjet = await calculate_budjet(new_idemnity , db)
-    new_idemnity.budjet = budjet
+    new_idemnity = Idemnity(date=application.start_date, zone_id=zone.id, app_id=application.id)
+    new_idemnity.zone = zone
     db.add(new_idemnity)
-    await db.commit()
-    await db.refresh(new_idemnity)
+    await db.flush()
     
-    # Build response dict so Pydantic can map model attributes to schema field names
-    resp = {
-        "id": new_idemnity.id,
-        "idemnity_date": new_idemnity.date,
-        "zone_id": new_idemnity.zone_id,
-        "budjet": new_idemnity.budjet,
-    }
-
-    return IdemnityResonse.model_validate(resp)
+    budget = await calculate_budget(new_idemnity, application, db)
+    new_idemnity.budget = budget
+    application.calculated_fees = float(budget)
+    
+    await db.flush()
+    return new_idemnity
 
 
 async def delete_idemnity(idemnity_id: str, user_id: UUID, db: AsyncSessionLocal) -> bool:

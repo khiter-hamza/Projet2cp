@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """
 Comprehensive API Workflow Testing Script
-Respects the complete application submission and evaluation workflow
+Tests all endpoints in the correct order for a full application lifecycle.
+
+Roles needed:
+- chercheur (researcher): Creates and submits applications
+- assistant_dpgr (assistant): Manages sessions
+- admin_dpgr (admin): CS deliberation decisions
 """
 
 import httpx
@@ -15,564 +20,81 @@ from uuid import UUID
 BASE_URL = "http://localhost:8000/api/v1"
 UPLOAD_DIR = "uploads/test_documents"
 
-# Test credentials
+# Test credentials - 3 roles
 RESEARCHER_EMAIL = "researcher@test.com"
-RESEARCHER_PASSWORD = "TestPassword123!"
+RESEARCHER_PASSWORD = "test"
 RESEARCHER_USERNAME = "researcher_user"
-RESEARCHER_LASTNAME = "Test"
+RESEARCHER_LASTNAME = "TestLastname"
+
+ASSISTANT_EMAIL = "assistant@test.com"
+ASSISTANT_PASSWORD = "test"
+ASSISTANT_USERNAME = "assistant_user"
+ASSISTANT_LASTNAME = "AssistantLastname"
 
 ADMIN_EMAIL = "admin@test.com"
-ADMIN_PASSWORD = "AdminPassword123!"
+ADMIN_PASSWORD = "test"
 ADMIN_USERNAME = "admin_user"
-ADMIN_LASTNAME = "Admin"
+ADMIN_LASTNAME = "AdminLastname"
 
-# Global variables to store IDs
+# Stored IDs
 researcher_token = None
+assistant_token = None
 admin_token = None
 session_id = None
 application_id = None
 document_id = None
 
-
-# ============================================================================
-# 1. AUTHENTICATION & USER MANAGEMENT
-# ============================================================================
-
-async def register_user(client, email, username, lastname, password, role="chercheur", grade="professeur", anciente=5, laboratory_name="Lab1"):
-    """Register a new user"""
-    print(f"\n[1. REGISTER] Creating user: {email}")
-    
-    payload = {
-        "email": email,
-        "username": username,
-        "lastname": lastname,
-        "password": password,
-        "role": role,
-        "grade": grade,
-        "anciente": anciente,
-        "laboratory_name": laboratory_name,
-        "ancientee": 0
-    }
-    
-    try:
-        response = await client.post(f"{BASE_URL}/auth/register", json=payload)
-        response.raise_for_status()
-        user = response.json()
-        print(f"✓ User registered: {user}")
-        return user
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Registration failed: {e.response.status_code} - {e.response.text}")
-        return None
+passed = 0
+failed = 0
+errors = []
 
 
-async def login_user(client, email, password):
-    """Login and get authentication token"""
-    print(f"\n[2. LOGIN] Authenticating user: {email}")
-    
-    payload = {
-        "email": email,
-        "password": password
-    }
-    
-    try:
-        response = await client.post(f"{BASE_URL}/auth/login", json=payload)
-        response.raise_for_status()
-        data = response.json()
-        print(f"✓ Login successful")
-        print(f"  Token: {data.get('access_token', data)[:50]}...")
-        return data
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Login failed: {e.response.status_code} - {e.response.text}")
-        return None
+def report(step, success, detail=""):
+    global passed, failed, errors
+    status = "✓" if success else "✗"
+    print(f"  {status} {step}")
+    if detail:
+        print(f"    → {detail}")
+    if success:
+        passed += 1
+    else:
+        failed += 1
+        errors.append(f"{step}: {detail}")
 
 
 # ============================================================================
-# 2. SESSION MANAGEMENT
+# HELPERS
 # ============================================================================
 
-async def get_active_session(client):
-    """Get the currently active session"""
-    print(f"\n[3. GET ACTIVE SESSION]")
+async def api(client, method, path, token=None, json_data=None, files=None, data=None, params=None, expect_status=None):
+    """Generic API call helper"""
+    headers = {}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    
+    kwargs = {"headers": headers}
+    if json_data is not None:
+        kwargs["json"] = json_data
+    if files is not None:
+        kwargs["files"] = files
+    if data is not None:
+        kwargs["data"] = data
+    if params is not None:
+        kwargs["params"] = params
+    
+    url = f"{BASE_URL}{path}"
+    response = await getattr(client, method)(url, **kwargs)
+    
+    if expect_status and response.status_code != expect_status:
+        return None, response.status_code, response.text
+    
+    if response.status_code >= 400:
+        return None, response.status_code, response.text
     
     try:
-        response = await client.get(f"{BASE_URL}/sessions/active")
-        response.raise_for_status()
-        session = response.json()
-        print(f"✓ Active session retrieved:")
-        print(f"  ID: {session.get('id')}")
-        print(f"  Name: {session.get('name')}")
-        print(f"  Academic Year: {session.get('academic_year')}")
-        print(f"  Start Date: {session.get('start_date')}")
-        print(f"  End Date: {session.get('end_date')}")
-        return session
-    except httpx.HTTPStatusError as e:
-        if e.response.status_code == 404:
-            print(f"✗ No active session found")
-        else:
-            print(f"✗ Get active session failed: {e.response.status_code}")
-        return None
-
-
-async def create_session(client, admin_token, name, academic_year, start_date, end_date):
-    """Create a new session (Admin only)"""
-    print(f"\n[3.1 CREATE SESSION] Admin creating session: {name}")
-    
-    headers = {"Authorization": f"Bearer {admin_token}"}
-    payload = {
-        "name": name,
-        "academic_year": academic_year,
-        "start_date": start_date,
-        "end_date": end_date
-    }
-    
-    try:
-        response = await client.post(
-            f"{BASE_URL}/sessions/",
-            json=payload,
-            headers=headers
-        )
-        response.raise_for_status()
-        session = response.json()
-        print(f"✓ Session created:")
-        print(f"  ID: {session.get('id')}")
-        print(f"  Name: {session.get('name')}")
-        return session
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Create session failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-# ============================================================================
-# 3. APPLICATION WORKFLOW
-# ============================================================================
-
-async def create_draft_application(client, token, destination_country="france"):
-    """Create a new draft application"""
-    print(f"\n[4. CREATE DRAFT APPLICATION]")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    tomorrow = date.today() + timedelta(days=1)
-    next_month = tomorrow + timedelta(days=30)
-    
-    payload = {
-        "destination_country": destination_country.lower() if isinstance(destination_country, str) else destination_country,
-        "destination_city": "Paris",
-        "host_institution": "University of Paris",
-        "scientific_objective": "Research on AI and machine learning",
-        "start_date": str(tomorrow),
-        "end_date": str(next_month),
-    }
-    
-    try:
-        response = await client.post(
-            f"{BASE_URL}/applications/",
-            json=payload,
-            headers=headers
-        )
-        response.raise_for_status()
-        app = response.json()
-        print(f"✓ Draft application created:")
-        print(f"  ID: {app.get('id')}")
-        print(f"  Status: {app.get('status')}")
-        print(f"  Destination: {app.get('destination_country')} - {app.get('destination_city')}")
-        return app
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Create application failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-async def update_draft_application(client, token, app_id, data):
-    """Update a draft application"""
-    print(f"\n[5. UPDATE DRAFT APPLICATION] ID: {app_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.patch(
-            f"{BASE_URL}/applications/{app_id}",
-            json=data,
-            headers=headers
-        )
-        response.raise_for_status()
-        app = response.json()
-        print(f"✓ Application updated:")
-        print(f"  Status: {app.get('status')}")
-        print(f"  Scientific Objective: {app.get('scientific_objective')}")
-        return app
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Update application failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-async def get_application(client, token, app_id):
-    """Retrieve a specific application"""
-    print(f"\n[5.1 GET APPLICATION] ID: {app_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.get(
-            f"{BASE_URL}/applications/{app_id}",
-            headers=headers
-        )
-        response.raise_for_status()
-        app = response.json()
-        print(f"✓ Application retrieved:")
-        print(f"  Status: {app.get('status')}")
-        print(f"  Eligible: {app.get('is_eligible')}")
-        print(f"  CS Decision: {app.get('cs_decision')}")
-        return app
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Get application failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-async def list_applications(client, token):
-    """List all applications for the current user"""
-    print(f"\n[5.2 LIST APPLICATIONS]")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.get(
-            f"{BASE_URL}/applications/",
-            headers=headers
-        )
-        response.raise_for_status()
-        apps = response.json()
-        print(f"✓ Applications retrieved: {len(apps)} applications")
-        for app in apps:
-            print(f"  - {app.get('id')}: Status={app.get('status')}, Eligible={app.get('is_eligible')}")
-        return apps
-    except httpx.HTTPStatusError as e:
-        print(f"✗ List applications failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-# ============================================================================
-# 4. DOCUMENT MANAGEMENT
-# ============================================================================
-
-async def create_test_document(filename):
-    """Create a test document file"""
-    Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
-    filepath = Path(UPLOAD_DIR) / filename
-    
-    if not filepath.exists():
-        filepath.write_text("This is a test document for API testing purposes.")
-    
-    return filepath
-
-
-async def upload_document(client, token, app_id, document_type, file_path):
-    """Upload a document for an application"""
-    print(f"\n[6. UPLOAD DOCUMENT] Type: {document_type}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        with open(file_path, "rb") as f:
-            files = {
-                "file": (Path(file_path).name, f, "application/pdf")
-            }
-            data = {
-                "document_type": document_type
-            }
-            
-            response = await client.post(
-                f"{BASE_URL}/applications/{app_id}/documents",
-                files=files,
-                data=data,
-                headers=headers
-            )
-        
-        response.raise_for_status()
-        doc = response.json()
-        print(f"✓ Document uploaded:")
-        print(f"  ID: {doc.get('id')}")
-        print(f"  Type: {doc.get('document_type')}")
-        print(f"  File: {doc.get('file_name')}")
-        return doc
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Upload document failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-async def get_documents(client, token, app_id):
-    """Get all documents for an application"""
-    print(f"\n[6.1 GET DOCUMENTS] Application ID: {app_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.get(
-            f"{BASE_URL}/applications/{app_id}/documments",
-            headers=headers
-        )
-        response.raise_for_status()
-        docs = response.json()
-        print(f"✓ Documents retrieved: {len(docs)} documents")
-        for doc in docs:
-            print(f"  - {doc.get('id')}: {doc.get('document_type')}")
-        return docs
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Get documents failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-# ============================================================================
-# 5. ELIGIBILITY & EVALUATION
-# ============================================================================
-
-async def check_eligibility(client, token, app_id):
-    """Perform eligibility check on an application"""
-    print(f"\n[7. CHECK ELIGIBILITY] Application ID: {app_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.post(
-            f"{BASE_URL}/applications/{app_id}/check-eligibility",
-            headers=headers
-        )
-        response.raise_for_status()
-        result = response.json()
-        print(f"✓ Eligibility check completed:")
-        print(f"  Is Eligible: {result.get('is_eligible')}")
-        print(f"  Errors: {result.get('errors', [])}")
-        return result
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Eligibility check failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-async def get_eligibility_details(client, token, app_id):
-    """Get detailed eligibility information"""
-    print(f"\n[7.1 GET ELIGIBILITY DETAILS] Application ID: {app_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.get(
-            f"{BASE_URL}/applications/{app_id}/eligibility-details",
-            headers=headers
-        )
-        response.raise_for_status()
-        details = response.json()
-        print(f"✓ Eligibility details retrieved:")
-        print(f"  Grade Eligible: {details.get('grade_eligible')}")
-        print(f"  Required Documents: {details.get('required_documents', [])}")
-        return details
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Get eligibility details failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-async def get_user_score(client, token, user_id):
-    """Get the evaluation score for a user"""
-    print(f"\n[8. GET USER SCORE] User ID: {user_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.get(
-            f"{BASE_URL}/evaluation/users/{user_id}/score",
-            headers=headers
-        )
-        response.raise_for_status()
-        score = response.json()
-        print(f"✓ User score retrieved:")
-        print(f"  Total Score: {score.get('total_score')}")
-        print(f"  Completed Applications: {score.get('completed_applications_count')}")
-        print(f"  Total Applications: {score.get('total_applications_count')}")
-        return score
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Get user score failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-# ============================================================================
-# 6. APPLICATION SUBMISSION
-# ============================================================================
-
-async def submit_application(client, token, app_id, data):
-    """Submit a draft application for review"""
-    print(f"\n[9. SUBMIT APPLICATION] Application ID: {app_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.post(
-            f"{BASE_URL}/applications/{app_id}/submit",
-            json=data,
-            headers=headers
-        )
-        response.raise_for_status()
-        result = response.json()
-        print(f"✓ Application submitted successfully:")
-        print(f"  Status: {result.get('status')}")
-        return result
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Submit application failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-# ============================================================================
-# 7. HISTORY & TRACKING
-# ============================================================================
-
-async def get_application_history(client, token, app_id):
-    """Get the history of an application"""
-    print(f"\n[10. GET APPLICATION HISTORY] Application ID: {app_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.get(
-            f"{BASE_URL}/applications/{app_id}/history",
-            headers=headers,
-            params={"limit": 50, "offset": 0}
-        )
-        response.raise_for_status()
-        history = response.json()
-        print(f"✓ Application history retrieved:")
-        print(f"  Total events: {history.get('total', 0)}")
-        for event in history.get('items', [])[:5]:
-            print(f"  - {event.get('event_type')}: {event.get('timestamp')}")
-        return history
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Get application history failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-async def get_application_history_page(client, token, limit=50, offset=0, status=None):
-    """Get paginated application history"""
-    print(f"\n[10.1 GET HISTORY PAGE] Limit: {limit}, Offset: {offset}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    params = {
-        "limit": limit,
-        "offset": offset,
-        "sort_by": "submitted_at",
-        "sort_order": "desc",
-        "session_filter": "this"
-    }
-    
-    if status:
-        params["status"] = status
-    
-    try:
-        response = await client.get(
-            f"{BASE_URL}/applications/history",
-            headers=headers,
-            params=params
-        )
-        response.raise_for_status()
-        history = response.json()
-        print(f"✓ History page retrieved:")
-        print(f"  Total: {history.get('total')}")
-        print(f"  Items: {len(history.get('items', []))}")
-        return history
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Get history page failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-# ============================================================================
-# 8. CS WORKFLOW (Admin/CS Users)
-# ============================================================================
-
-async def prepare_cs_deliberation(client, token, session_id):
-    """Prepare CS deliberation for a session"""
-    print(f"\n[11. PREPARE CS DELIBERATION] Session ID: {session_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.post(
-            f"{BASE_URL}/cs/prepare-deliberation/{session_id}",
-            headers=headers
-        )
-        response.raise_for_status()
-        result = response.json()
-        print(f"✓ CS deliberation prepared:")
-        print(f"  Session: {result.get('session_name')}")
-        print(f"  Total Applications: {result.get('total_applications')}")
-        print(f"  Ready: {result.get('ready_for_deliberation')}")
-        return result
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Prepare CS deliberation failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-async def get_cs_dashboard(client, token, session_id=None):
-    """Get CS dashboard with applications for decision"""
-    print(f"\n[11.1 GET CS DASHBOARD] Session ID: {session_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    params = {}
-    if session_id:
-        params["session_id"] = session_id
-    
-    try:
-        response = await client.get(
-            f"{BASE_URL}/cs/dashboard",
-            headers=headers,
-            params=params
-        )
-        response.raise_for_status()
-        dashboard = response.json()
-        print(f"✓ CS dashboard retrieved:")
-        print(f"  Applications Ready: {dashboard.get('applications_count')}")
-        return dashboard
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Get CS dashboard failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-async def approve_application(client, token, app_id):
-    """CS: Approve an application"""
-    print(f"\n[12. APPROVE APPLICATION] Application ID: {app_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    try:
-        response = await client.post(
-            f"{BASE_URL}/cs/applications/{app_id}/approve",
-            headers=headers,
-            json={}
-        )
-        response.raise_for_status()
-        result = response.json()
-        print(f"✓ Application approved:")
-        print(f"  CS Decision: {result.get('cs_decision')}")
-        return result
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Approve application failed: {e.response.status_code} - {e.response.text}")
-        return None
-
-
-async def reject_application(client, token, app_id, reason):
-    """CS: Reject an application"""
-    print(f"\n[12.1 REJECT APPLICATION] Application ID: {app_id}")
-    
-    headers = {"Authorization": f"Bearer {token}"}
-    payload = {"reason": reason}
-    
-    try:
-        response = await client.post(
-            f"{BASE_URL}/cs/applications/{app_id}/reject",
-            json=payload,
-            headers=headers
-        )
-        response.raise_for_status()
-        result = response.json()
-        print(f"✓ Application rejected:")
-        print(f"  CS Decision: {result.get('cs_decision')}")
-        return result
-    except httpx.HTTPStatusError as e:
-        print(f"✗ Reject application failed: {e.response.status_code} - {e.response.text}")
-        return None
+        return response.json(), response.status_code, None
+    except Exception:
+        return response.content, response.status_code, None
 
 
 # ============================================================================
@@ -580,190 +102,456 @@ async def reject_application(client, token, app_id, reason):
 # ============================================================================
 
 async def main():
-    """Main workflow demonstrating the complete API usage"""
-    
+    global researcher_token, assistant_token, admin_token
+    global session_id, application_id, document_id
+
     print("=" * 80)
-    print("API WORKFLOW TEST - Comprehensive Application Submission Process")
+    print("COMPREHENSIVE API WORKFLOW TEST")
     print("=" * 80)
-    
+
     async with httpx.AsyncClient(timeout=30) as client:
-        
-        # ===== PHASE 1: AUTHENTICATION =====
-        print("\n" + "=" * 80)
-        print("PHASE 1: AUTHENTICATION & USER SETUP")
-        print("=" * 80)
-        
-        # Register researcher
-        researcher = await register_user(
-            client,
-            RESEARCHER_EMAIL,
-            RESEARCHER_USERNAME,
-            RESEARCHER_LASTNAME,
-            RESEARCHER_PASSWORD,
-            role="chercheur",
-            grade="professeur"
-        )
-        
-        # Register admin
-        admin = await register_user(
-            client,
-            ADMIN_EMAIL,
-            ADMIN_USERNAME,
-            ADMIN_LASTNAME,
-            ADMIN_PASSWORD,
-            role="admin_dpgr",
-            grade="professeur"
-        )
-        
+
+        # =====================================================================
+        # PHASE 1: HEALTH CHECK
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 1: HEALTH CHECK")
+        print(f"{'='*60}")
+
+        result, status, err = await api(client, "get", "/health")
+        report("GET /health", status == 200, f"status={status}")
+
+        # =====================================================================
+        # PHASE 2: USER REGISTRATION & LOGIN
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 2: USER REGISTRATION & LOGIN")
+        print(f"{'='*60}")
+
+        # Register researcher (chercheur)
+        result, status, err = await api(client, "post", "/auth/register", json_data={
+            "email": RESEARCHER_EMAIL, "username": RESEARCHER_USERNAME,
+            "lastname": RESEARCHER_LASTNAME, "password": RESEARCHER_PASSWORD,
+            "role": "chercheur", "grade": "professeur", "anciente": 5,
+            "laboratory_name": "AI Lab", "ancientee": 0
+        })
+        report("POST /auth/register (researcher)", status in [200, 201], f"status={status}")
+
+        # Register assistant (assistant_dpgr) - manages sessions
+        result, status, err = await api(client, "post", "/auth/register", json_data={
+            "email": ASSISTANT_EMAIL, "username": ASSISTANT_USERNAME,
+            "lastname": ASSISTANT_LASTNAME, "password": ASSISTANT_PASSWORD,
+            "role": "assistant_dpgr", "grade": "professeur", "anciente": 10,
+            "laboratory_name": "Admin Office", "ancientee": 0
+        })
+        report("POST /auth/register (assistant)", status in [200, 201], f"status={status}")
+
+        # Register admin (admin_dpgr) - CS deliberation
+        result, status, err = await api(client, "post", "/auth/register", json_data={
+            "email": ADMIN_EMAIL, "username": ADMIN_USERNAME,
+            "lastname": ADMIN_LASTNAME, "password": ADMIN_PASSWORD,
+            "role": "admin_dpgr", "grade": "professeur", "anciente": 15,
+            "laboratory_name": "Admin Office", "ancientee": 0
+        })
+        report("POST /auth/register (admin_dpgr)", status in [200, 201], f"status={status}")
+
         # Login researcher
-        researcher_auth = await login_user(client, RESEARCHER_EMAIL, RESEARCHER_PASSWORD)
-        researcher_token = researcher_auth.get("access_token") if researcher_auth else None
-        
+        result, status, err = await api(client, "post", "/auth/login", json_data={
+            "email": RESEARCHER_EMAIL, "password": RESEARCHER_PASSWORD
+        })
+        if result:
+            researcher_token = result.get("access_token")
+        report("POST /auth/login (researcher)", researcher_token is not None, f"status={status}")
+
+        # Login assistant
+        result, status, err = await api(client, "post", "/auth/login", json_data={
+            "email": ASSISTANT_EMAIL, "password": ASSISTANT_PASSWORD
+        })
+        if result:
+            assistant_token = result.get("access_token")
+        report("POST /auth/login (assistant)", assistant_token is not None, f"status={status}")
+
         # Login admin
-        admin_auth = await login_user(client, ADMIN_EMAIL, ADMIN_PASSWORD)
-        admin_token = admin_auth.get("access_token") if admin_auth else None
-        
-        if not researcher_token or not admin_token:
-            print("\n✗ Authentication failed. Exiting.")
+        result, status, err = await api(client, "post", "/auth/login", json_data={
+            "email": ADMIN_EMAIL, "password": ADMIN_PASSWORD
+        })
+        if result:
+            admin_token = result.get("access_token")
+        report("POST /auth/login (admin)", admin_token is not None, f"status={status}")
+
+        if not researcher_token or not assistant_token or not admin_token:
+            print("\n✗ FATAL: Authentication failed. Cannot continue.")
             return
-        
-        # ===== PHASE 2: SESSION MANAGEMENT =====
-        print("\n" + "=" * 80)
-        print("PHASE 2: SESSION MANAGEMENT")
-        print("=" * 80)
-        
-        # Check for active session
-        active_session = await get_active_session(client)
-        
-        if not active_session:
-            # Create a new session if none exists
-            tomorrow = date.today() + timedelta(days=1)
-            end_date = tomorrow + timedelta(days=90)
-            
-            new_session = await create_session(
-                client,
-                admin_token,
-                "2024-2025 Academic Year",
-                "2024-2025",
-                str(tomorrow),
-                str(end_date)
-            )
-            session_id = new_session.get("id") if new_session else None
+
+        # =====================================================================
+        # PHASE 3: SESSION MANAGEMENT (assistant role)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 3: SESSION MANAGEMENT (assistant_dpgr)")
+        print(f"{'='*60}")
+
+        # Check for active session first
+        result, status, err = await api(client, "get", "/sessions/active")
+        if status == 200 and result:
+            session_id = result.get("id")
+            report("GET /sessions/active", True, f"Found existing session: {session_id}")
         else:
-            session_id = active_session.get("id")
-        
-        # ===== PHASE 3: APPLICATION CREATION & MANAGEMENT =====
-        print("\n" + "=" * 80)
-        print("PHASE 3: APPLICATION CREATION & MANAGEMENT")
-        print("=" * 80)
-        
-        # Create draft application
-        app = await create_draft_application(client, researcher_token)
-        application_id = app.get("id") if app else None
-        
-        if not application_id:
-            print("\n✗ Application creation failed. Exiting.")
+            # Create session (assistant role)
+            tomorrow = date.today()
+            end_date = tomorrow + timedelta(days=120)
+            result, status, err = await api(client, "post", "/sessions/", token=assistant_token, json_data={
+                "name": "2025-2026 Academic Year",
+                "academic_year": "2025-2026",
+                "start_date": str(tomorrow),
+                "end_date": str(end_date)
+            })
+            if result:
+                session_id = result.get("id")
+            report("POST /sessions/ (create)", session_id is not None, f"status={status}, err={err}")
+
+        if not session_id:
+            print("\n✗ FATAL: No session available. Cannot continue.")
             return
-        
-        # Update draft with more details
-        update_data = {
+
+        # List sessions
+        result, status, err = await api(client, "get", "/sessions/", token=assistant_token)
+        report("GET /sessions/ (list)", status == 200, f"status={status}, count={len(result) if result else 0}")
+
+        # Get session by ID
+        result, status, err = await api(client, "get", f"/sessions/{session_id}", token=assistant_token)
+        report(f"GET /sessions/{{id}}", status == 200, f"status={status}")
+
+        # =====================================================================
+        # PHASE 4: APPLICATION CREATION (researcher role)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 4: APPLICATION CREATION (chercheur)")
+        print(f"{'='*60}")
+
+        # Create draft application
+        tomorrow = date.today() + timedelta(days=1)
+        next_month = tomorrow + timedelta(days=6)  # 7 days for professeur séjour
+        result, status, err = await api(client, "post", "/applications/", token=researcher_token, json_data={
+            "destination_country": "france",
+            "destination_city": "Paris",
+            "host_institution": "University of Paris",
+            "scientific_objective": "Research on AI and machine learning",
+            "start_date": str(tomorrow),
+            "end_date": str(next_month),
+        })
+        if result:
+            application_id = result.get("id")
+        report("POST /applications/ (create draft)", application_id is not None, f"status={status}, err={err}")
+
+        if not application_id:
+            print("\n✗ FATAL: Application creation failed. Cannot continue.")
+            return
+
+        # Get current application
+        result, status, err = await api(client, "get", "/applications/current", token=researcher_token)
+        report("GET /applications/current", status == 200, f"status={status}, err={err}")
+
+        # Get application by ID
+        result, status, err = await api(client, "get", f"/applications/{application_id}", token=researcher_token)
+        report(f"GET /applications/{{id}}", status == 200, f"status={status}")
+
+        # List applications
+        result, status, err = await api(client, "get", "/applications/", token=researcher_token)
+        report("GET /applications/ (list)", status == 200 and isinstance(result, list), f"status={status}, count={len(result) if result else 0}")
+
+        # Update draft
+        result, status, err = await api(client, "patch", f"/applications/{application_id}", token=researcher_token, json_data={
             "destination_country": "france",
             "destination_city": "Lyon",
             "host_institution": "Claude Bernard University",
             "scientific_objective": "Advanced research on distributed systems and AI",
-        }
-        await update_draft_application(client, researcher_token, application_id, update_data)
-        
-        # Get application details
-        app_details = await get_application(client, researcher_token, application_id)
-        
-        # List all applications
-        all_apps = await list_applications(client, researcher_token)
-        
-        # ===== PHASE 4: DOCUMENT UPLOAD =====
-        print("\n" + "=" * 80)
-        print("PHASE 4: DOCUMENT MANAGEMENT")
-        print("=" * 80)
-        
-        # Create test documents
-        test_doc_path = await create_test_document("test_document.txt")
-        
-        # Upload document
-        doc = await upload_document(
-            client,
-            researcher_token,
-            application_id,
-            "cv",
-            str(test_doc_path)
-        )
-        document_id = doc.get("id") if doc else None
-        
-        # Get documents
-        docs = await get_documents(client, researcher_token, application_id)
-        
-        # ===== PHASE 5: ELIGIBILITY & EVALUATION =====
-        print("\n" + "=" * 80)
-        print("PHASE 5: ELIGIBILITY & EVALUATION")
-        print("=" * 80)
-        
-        # Check eligibility
-        eligibility = await check_eligibility(client, researcher_token, application_id)
-        
-        # Get eligibility details
-        eligibility_details = await get_eligibility_details(client, researcher_token, application_id)
-        
-        # Get user score
-        if researcher and researcher.get("id"):
-            score = await get_user_score(client, researcher_token, researcher.get("id"))
-        
-        # ===== PHASE 6: APPLICATION SUBMISSION =====
-        print("\n" + "=" * 80)
-        print("PHASE 6: APPLICATION SUBMISSION")
-        print("=" * 80)
-        
-        # Submit application
-        submit_data = {
+        })
+        report(f"PATCH /applications/{{id}} (update)", status == 200, f"status={status}, err={err}")
+
+        # =====================================================================
+        # PHASE 5: DOCUMENT MANAGEMENT (researcher role)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 5: DOCUMENT MANAGEMENT (chercheur)")
+        print(f"{'='*60}")
+
+        # Create test document files
+        Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
+        test_file = Path(UPLOAD_DIR) / "test_cv.pdf"
+        test_file.write_text("This is a test CV document.")
+
+        # Upload CV
+        with open(test_file, "rb") as f:
+            result, status, err = await api(client, "post",
+                f"/applications/{application_id}/documents",
+                token=researcher_token,
+                files={"file": ("test_cv.pdf", f, "application/pdf")},
+                data={"document_type": "cv"}
+            )
+        if result:
+            document_id = result.get("id")
+        report("POST /applications/{id}/documents (upload CV)", document_id is not None, f"status={status}, err={err}")
+
+        # Upload more required docs
+        doc_types = ["invitation", "programme", "passport", "accord_labo"]
+        for doc_type in doc_types:
+            test_file_doc = Path(UPLOAD_DIR) / f"test_{doc_type}.pdf"
+            test_file_doc.write_text(f"This is a test {doc_type} document.")
+            with open(test_file_doc, "rb") as f:
+                result, status, err = await api(client, "post",
+                    f"/applications/{application_id}/documents",
+                    token=researcher_token,
+                    files={"file": (f"test_{doc_type}.pdf", f, "application/pdf")},
+                    data={"document_type": doc_type}
+                )
+            report(f"POST /applications/{{id}}/documents (upload {doc_type})", status in [200, 201], f"status={status}")
+
+        # Get documents for application
+        result, status, err = await api(client, "get", f"/applications/{application_id}/documents", token=researcher_token)
+        report("GET /applications/{id}/documents (list)", status == 200, f"status={status}, count={len(result) if result else 0}")
+
+        # Get single document
+        if document_id:
+            result, status, err = await api(client, "get", f"/document/{document_id}", token=researcher_token)
+            report("GET /document/{id} (single)", status == 200, f"status={status}")
+
+            # Download single document
+            result, status, err = await api(client, "get", f"/document/{document_id}/download", token=researcher_token)
+            report("GET /document/{id}/download", status == 200, f"status={status}")
+
+        # Download all documents as ZIP
+        result, status, err = await api(client, "get", f"/applications/{application_id}/documents/downloads", token=researcher_token)
+        report("GET /applications/{id}/documents/downloads (ZIP)", status == 200, f"status={status}, err={err}")
+
+        # =====================================================================
+        # PHASE 6: ELIGIBILITY CHECK (researcher role)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 6: ELIGIBILITY CHECK (chercheur)")
+        print(f"{'='*60}")
+
+        result, status, err = await api(client, "get", f"/applications/{application_id}/eligibility-details", token=researcher_token)
+        report("GET /applications/{id}/eligibility-details", status == 200, f"status={status}, err={err}")
+
+        # =====================================================================
+        # PHASE 7: APPLICATION SUBMISSION (researcher role)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 7: APPLICATION SUBMISSION (chercheur)")
+        print(f"{'='*60}")
+
+        result, status, err = await api(client, "post", f"/applications/{application_id}/submit", token=researcher_token, json_data={
             "destination_country": "france",
             "destination_city": "Lyon",
             "host_institution": "Claude Bernard University",
             "scientific_objective": "Advanced research on distributed systems and AI",
-        }
+        })
+        report("POST /applications/{id}/submit", status == 200, f"status={status}, err={err}")
+        if result:
+            print(f"    → Eligibility: {result.get('eligibility_status')}")
+            print(f"    → Errors: {result.get('verification_errors')}")
+
+        # =====================================================================
+        # PHASE 8: HISTORY & TRACKING (researcher role)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 8: HISTORY & TRACKING (chercheur)")
+        print(f"{'='*60}")
+
+        # Application-specific history
+        result, status, err = await api(client, "get", f"/applications/{application_id}/history",
+            token=researcher_token, params={"limit": 50, "offset": 0})
+        report("GET /applications/{id}/history", status == 200, f"status={status}, err={err}")
+
+        # History page (all applications)
+        result, status, err = await api(client, "get", "/applications/history",
+            token=researcher_token, params={"limit": 10, "offset": 0, "sort_by": "submitted_at", "sort_order": "desc", "session_filter": "this"})
+        report("GET /applications/history (page)", status == 200, f"status={status}, err={err}")
+
+        # =====================================================================
+        # PHASE 9: CS DELIBERATION (admin_dpgr role)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 9: CS DELIBERATION (admin_dpgr)")
+        print(f"{'='*60}")
+
+        # CS approve application
+        result, status, err = await api(client, "post", f"/cs/deliberate/{application_id}", token=admin_token, json_data={
+            "decision": "approved",
+            "notes": "Excellent candidate, approved by CS"
+        })
+        report("POST /cs/deliberate/{id} (approve)", status == 200, f"status={status}, err={err}")
+
+        # Verify application status changed
+        result, status, err = await api(client, "get", f"/applications/{application_id}", token=researcher_token)
+        app_status = result.get("status") if result else None
+        cs_decision = result.get("cs_decision") if result else None
+        report("GET /applications/{id} (verify approval)", app_status == "approved", f"status={app_status}, cs_decision={cs_decision}")
+
+        # =====================================================================
+        # PHASE 10: NOTIFICATIONS (researcher role)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 10: NOTIFICATIONS (chercheur)")
+        print(f"{'='*60}")
+
+        # Get notifications
+        result, status, err = await api(client, "get", "/notifications/", token=researcher_token)
+        notif_count = len(result) if result else 0
+        report("GET /notifications/ (list)", status == 200, f"status={status}, count={notif_count}")
+
+        # Count unread
+        result, status, err = await api(client, "get", "/notifications/count-unread", token=researcher_token)
+        report("GET /notifications/count-unread", status == 200, f"status={status}, result={result}")
+
+        # Mark all as read
+        result, status, err = await api(client, "patch", "/notifications/mark-all-as-read", token=researcher_token)
+        report("PATCH /notifications/mark-all-as-read", status == 200, f"status={status}")
+
+        # =====================================================================
+        # PHASE 11: DASHBOARD (all roles)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 11: DASHBOARD")
+        print(f"{'='*60}")
+
+        # Researcher dashboard
+        result, status, err = await api(client, "get", "/dashboard/researcher", token=researcher_token)
+        report("GET /dashboard/researcher", status == 200, f"status={status}, err={err}")
+
+        # Researcher current application (dashboard)
+        result, status, err = await api(client, "get", "/dashboard/researcher/current-application", token=researcher_token)
+        report("GET /dashboard/researcher/current-application", status == 200, f"status={status}, err={err}")
+
+        # Admin dashboard
+        result, status, err = await api(client, "get", "/dashboard/admin", token=admin_token)
+        report("GET /dashboard/admin", status == 200, f"status={status}, err={err}")
+
+        # CS dashboard
+        result, status, err = await api(client, "get", "/dashboard/cs", token=admin_token)
+        report("GET /dashboard/cs", status == 200, f"status={status}, err={err}")
+
+        # Statistics
+        result, status, err = await api(client, "get", "/dashboard/statistics")
+        report("GET /dashboard/statistics", status == 200, f"status={status}, err={err}")
+
+        # =====================================================================
+        # PHASE 12: INDEMNITY/ZONES
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 12: INDEMNITY / ZONES")
+        print(f"{'='*60}")
+
+        # Get zones (researcher can view)
+        result, status, err = await api(client, "get", "/idemnity/zones", token=researcher_token)
+        report("GET /idemnity/zones", status == 200, f"status={status}, count={len(result) if result else 0}")
+
+        # =====================================================================
+        # PHASE 13: CANCELLATION FLOW (researcher role)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 13: CANCELLATION FLOW (chercheur)")
+        print(f"{'='*60}")
+
+        # Cancel the approved application
+        result, status, err = await api(client, "post", f"/applications/{application_id}/cancel", token=researcher_token, json_data={
+            "reason": "Changed plans due to scheduling conflict"
+        })
+        report("POST /applications/{id}/cancel", status == 200, f"status={status}, err={err}")
+
+        # PHASE 14: CANCELLATION CONFIRMATION (admin role)
+        print(f"\n{'='*60}")
+        print("PHASE 14: CANCELLATION CONFIRMATION (admin_dpgr)")
+        print(f"{'='*60}")
+
+        result, status, err = await api(client, "post", f"/applications/{application_id}/cancel_confirm", token=admin_token)
+        report("POST /applications/{id}/cancel_confirm", status == 200, f"status={status}")
         
-        submitted_app = await submit_application(client, researcher_token, application_id, submit_data)
-        
-        # ===== PHASE 7: HISTORY & TRACKING =====
-        print("\n" + "=" * 80)
-        print("PHASE 7: HISTORY & TRACKING")
-        print("=" * 80)
-        
-        # Get application history
-        history = await get_application_history(client, researcher_token, application_id)
-        
-        # Get history page
-        history_page = await get_application_history_page(client, researcher_token, limit=10, offset=0)
-        
-        # ===== PHASE 8: CS WORKFLOW (Optional) =====
-        if admin_token and session_id:
-            print("\n" + "=" * 80)
-            print("PHASE 8: CS WORKFLOW (Admin Operations)")
-            print("=" * 80)
+        # Verify status is now CANCELLED
+        result, status, err = await api(client, "get", f"/applications/{application_id}", token=researcher_token)
+        report("Verify status is CANCELLED", result.get("status") == "cancelled" if result else False, f"status={result.get('status') if result else 'N/A'}")
+
+        # =====================================================================
+        # PHASE 15: COMPLETION & CLOSING (Full Lifecycle)
+        # =====================================================================
+        print(f"\n{'='*60}")
+        print("PHASE 15: COMPLETION & CLOSING (full lifecycle)")
+        print(f"{'='*60}")
+
+        # 1. Create a second application to test completion
+        tomorrow = date.today() + timedelta(days=10)
+        end_date = tomorrow + timedelta(days=7)
+        result, status, err = await api(client, "post", "/applications/", token=researcher_token, json_data={
+            "destination_country": "allemagne",
+            "destination_city": "Berlin",
+            "host_institution": "TU Berlin",
+            "scientific_objective": "Robotics research",
+            "start_date": str(tomorrow),
+            "end_date": str(end_date),
+        })
+        app2_id = result.get("id") if result else None
+        report("Create 2nd application", app2_id is not None, f"id={app2_id}")
+
+        if app2_id:
+            # 2. Upload minimum required docs for submission
+            for doc_type in ["cv", "invitation", "programme", "passport", "accord_labo"]:
+                test_file_doc = Path(UPLOAD_DIR) / f"app2_{doc_type}.pdf"
+                test_file_doc.write_text(f"App2 {doc_type} content")
+                with open(test_file_doc, "rb") as f:
+                    await api(client, "post", f"/applications/{app2_id}/documents", token=researcher_token, 
+                             files={"file": (f"app2_{doc_type}.pdf", f, "application/pdf")},
+                             data={"document_type": doc_type})
             
-            # Prepare CS deliberation
-            cs_prep = await prepare_cs_deliberation(client, admin_token, session_id)
+            # 3. Submit
+            await api(client, "post", f"/applications/{app2_id}/submit", token=researcher_token, json_data={
+                "destination_country": "allemagne", "destination_city": "Berlin", "host_institution": "TU Berlin",
+                "scientific_objective": "Robotics research",
+            })
             
-            # Get CS dashboard
-            cs_dashboard = await get_cs_dashboard(client, admin_token, session_id)
-        
-        # ===== SUMMARY =====
-        print("\n" + "=" * 80)
-        print("WORKFLOW COMPLETED SUCCESSFULLY")
-        print("=" * 80)
-        print(f"\nKey IDs for reference:")
-        print(f"  Researcher User ID: {researcher.get('id') if researcher else 'N/A'}")
-        print(f"  Admin User ID: {admin.get('id') if admin else 'N/A'}")
-        print(f"  Session ID: {session_id}")
+            # 4. CS Approve
+            await api(client, "post", f"/cs/deliberate/{app2_id}", token=admin_token, json_data={
+                "decision": "approved", "notes": "Approved for completion test"
+            })
+            
+            # 5. Researcher uploads report -> Should trigger Status.COMPLETED
+            test_report = Path(UPLOAD_DIR) / "app2_report.pdf"
+            test_report.write_text("This is the final stay report.")
+            with open(test_report, "rb") as f:
+                result, status, err = await api(client, "post", f"/applications/{app2_id}/documents",
+                    token=researcher_token,
+                    files={"file": ("report.pdf", f, "application/pdf")},
+                    data={"document_type": "report"}
+                )
+            report("Upload Report (triggers COMPLETED)", status == 200, f"status={status}")
+
+            # 6. Verify status is COMPLETED
+            result, status, err = await api(client, "get", f"/applications/{app2_id}", token=researcher_token)
+            report("Verify status is COMPLETED", result.get("status") == "completed" if result else False, f"status={result.get('status') if result else 'N/A'}")
+
+            # 7. Admin closes application
+            result, status, err = await api(client, "post", f"/applications/{app2_id}/close_application", token=admin_token)
+            report("POST /applications/{id}/close_application", status == 200, f"status={status}")
+
+            # 8. Verify status is CLOSED
+            result, status, err = await api(client, "get", f"/applications/{app2_id}", token=researcher_token)
+            report("Verify status is CLOSED", result.get("status") == "closed" if result else False, f"status={result.get('status') if result else 'N/A'}")
+
+        # =====================================================================
+        # SUMMARY
+        # =====================================================================
+        print(f"\n{'='*80}")
+        print(f"TEST RESULTS: {passed} passed, {failed} failed, {passed + failed} total")
+        print(f"{'='*80}")
+
+        if errors:
+            print("\nFAILED TESTS:")
+            for e in errors:
+                print(f"  ✗ {e}")
+
+        print(f"\nKey IDs:")
+        print(f"  Session ID:     {session_id}")
         print(f"  Application ID: {application_id}")
-        print(f"  Document ID: {document_id}")
+        print(f"  Document ID:    {document_id}")
 
 
 if __name__ == "__main__":

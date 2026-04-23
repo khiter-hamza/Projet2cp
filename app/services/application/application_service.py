@@ -1,3 +1,4 @@
+from app.schemas.application import ApplicationResponse
 from fastapi import HTTPException, Response , Depends
 from uuid import UUID
 from datetime import datetime, date
@@ -10,7 +11,9 @@ from app.models.application import Application
 from app.models.user import User
 from app.models.session import Session
 from app.models.enums import *
+from app.services.evaluation.criteria_service import calculate_score
 from app.services.application.eligibility_service import perform_eligibility_check
+from app.services.financial.indemnity_service import generate_indemnity_for_application
 from app.core.database import AsyncSessionLocal, get_db
 from app.services.auth_service_utils import (
     verify_chercheur_role,
@@ -21,20 +24,34 @@ from app.services.auth_service_utils import (
 from app.services.notification.notification_service import create_notification, notify_admins
 from app.models.enums import NotificationType
 
+async def getCurrentApplication(db: AsyncSession, user_id: UUID):
+    current_session = await get_current_session(db)
+    await verify_chercheur_role(user_id=user_id,db=db)
+    
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available")
+
+    result = await db.execute(
+        select(Application)
+        .where(Application.user_id == user_id, Application.session_id == current_session.id)
+        .order_by(desc(Application.created_at))
+        .limit(1)
+    )
+    application = result.scalar_one_or_none()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    return ApplicationResponse.model_validate(application)
+
 
 async def getUserApplication(app_id: UUID, user_id: UUID, db: AsyncSession):
     """
-    Get an application.
-    
-    Authorization:
-    - chercheur: Can only get own applications
-    - CS admin:  Can get any application
+    Get an application. detail view.
     """
     user = await verify_cs_admin_or_chercheur(user_id, db)
     
     result = await db.execute(
         select(Application)
-        .options(selectinload(Application.documents))
         .where(Application.id == app_id)
     )
     application = result.scalar_one_or_none()
@@ -51,9 +68,6 @@ async def getUserApplication(app_id: UUID, user_id: UUID, db: AsyncSession):
 async def createDraft(data: ApplicationUpsert, db: AsyncSession, user_id: UUID):
     """
     Create a new draft application.
-    
-    Authorization: chercheur only
-    Restrictions: Max 1 draft per user at a time, must be in current session
     """
     user = await verify_chercheur_role(user_id, db)
     
@@ -61,17 +75,16 @@ async def createDraft(data: ApplicationUpsert, db: AsyncSession, user_id: UUID):
     current_session = await get_current_session(db)
     if not current_session:
         raise HTTPException(status_code=400, detail="No active session available for creating applications")
-    
+
     result = await db.execute(
         select(Application)
         .where(Application.user_id == user_id)
-        .where(Application.status == Status.DRAFT)
         .where(Application.session_id == current_session.id)
     )
     existing_draft = result.scalar_one_or_none()
     
     if existing_draft:
-        raise HTTPException(status_code=409, detail="A draft already exists for this user in the current session")
+        raise HTTPException(status_code=409, detail="An application already exists for this user in the current session")
     
     application = Application(user_id=user.id, session_id=current_session.id, **data.model_dump())
     
@@ -88,21 +101,12 @@ async def createDraft(data: ApplicationUpsert, db: AsyncSession, user_id: UUID):
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    # Load documents relationship
-    result = await db.execute(
-        select(Application)
-        .options(selectinload(Application.documents))
-        .where(Application.id == application.id)
-    )
-    application_with_docs = result.scalar_one()
-    return ApplicationResponse.model_validate(application_with_docs)
+    return ApplicationResponse.model_validate(application)
 
 
 async def updateDraft(app_id: UUID, data: ApplicationUpsert, db: AsyncSession, user_id: UUID):
     """
     Update a draft application.
-    
-    Authorization: chercheur only (own application)
     """
     user = await verify_chercheur_role(user_id, db)
     
@@ -136,49 +140,33 @@ async def updateDraft(app_id: UUID, data: ApplicationUpsert, db: AsyncSession, u
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
-    # Load documents relationship
-    result = await db.execute(
-        select(Application)
-        .options(selectinload(Application.documents))
-        .where(Application.id == draft.id)
-    )
-    draft_with_docs = result.scalar_one()
-    return ApplicationResponse.model_validate(draft_with_docs)
+    return ApplicationResponse.model_validate(draft)
 
-
+#not full version of list applications
 async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: ApplicationFilterParams ):
     """
-    List applications.
-    
-    Authorization:
-    - chercheur: Can only list own applications in current session
-    - CS admin:  Can list all applications in current session
+    List applications with pagination and advanced filtering.
     """
     user = await verify_cs_admin_or_chercheur(user_id, db)
     
     filters = appFilterQuery.model_dump()
-    query = select(Application).join(Application.user).options(selectinload(Application.documents))  # Join for user filters and load documents
+    query = select(Application).join(Application.user).outerjoin(Application.session)
     
-    # Default filter: current session
-    current_session = await get_current_session(db)
-    if current_session:
-        query = query.where(Application.session_id == current_session.id)
-    
-    # Chercheur can only see own applications
+    # --- Authorization Filter ---
     if user.role == UserRole.chercheur:
         query = query.where(Application.user_id == user_id)
     
+    # --- Basic Filters ---
     if filters.get("status"):
         query = query.where(Application.status == filters["status"])    
     
     if filters.get("user_id"):
-        # CS admin can filter by user_id, chercheur cannot
-        if user.role == UserRole.chercheur:
-            raise HTTPException(status_code=403, detail="Cannot filter by other user_id")
-        query = query.where(Application.user_id == UUID(filters["user_id"]))
+        if user.role == UserRole.chercheur and filters["user_id"] != user_id:
+             raise HTTPException(status_code=403, detail="Cannot filter by other user_id")
+        query = query.where(Application.user_id == filters["user_id"])
     
     if filters.get("session_id"):
-        query = query.where(Application.session_id == UUID(filters["session_id"]))
+        query = query.where(Application.session_id == filters["session_id"])
     
     if filters.get("stage_type"):
         query = query.where(Application.stage_type == filters["stage_type"])
@@ -188,28 +176,43 @@ async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: Appl
     
     if filters.get("cs_decision"):
         query = query.where(Application.cs_decision == filters["cs_decision"])
-    
-    if filters.get("is_eligible") is not None:
-        query = query.where(Application.is_eligible == filters["is_eligible"])
-    
-    if filters.get("zone_id"):
-        # TODO: Implement zone filtering - zones are related to indemnities, not users
-        pass
-    
+
     if filters.get("user_grade"):
         query = query.where(User.grade == filters["user_grade"])
     
+    # --- Quantitative Filters ---
+    if filters.get("min_score") is not None:
+        query = query.where(Application.score >= filters["min_score"])
+    if filters.get("max_score") is not None:
+        query = query.where(Application.score <= filters["max_score"])
+    
+    if filters.get("is_eligible") is not None:
+        query = query.where(Application.is_eligible == filters["is_eligible"])
+        
+    # --- Document Workflow Filters ---
+    if filters.get("has_report") is not None:
+        query = query.where(Application.stage_report_submitted == filters["has_report"])
+    if filters.get("has_attestation") is not None:
+        query = query.where(Application.attestation_submitted == filters["has_attestation"])
+    
+    # --- Date Ranges ---
     if filters.get("start_date_from"):
         query = query.where(Application.start_date >= filters["start_date_from"])
-    
     if filters.get("start_date_to"):
         query = query.where(Application.start_date <= filters["start_date_to"])
     
+    if filters.get("submitted_after"):
+        query = query.where(Application.submitted_at >= filters["submitted_after"])
+    if filters.get("submitted_before"):
+        query = query.where(Application.submitted_at <= filters["submitted_before"])
+    
+    # --- Advanced Text Search ---
     if filters.get("search"):
         search_term = f"%{filters['search']}%"
         query = query.where(
             or_(
                 User.username.ilike(search_term),
+                Session.name.ilike(search_term),
                 Application.scientific_objective.ilike(search_term),
                 Application.host_institution.ilike(search_term),
                 Application.destination_city.ilike(search_term),
@@ -217,14 +220,10 @@ async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: Appl
             )
         )
     
-    # Sorting
-    sort_by = filters.get("sort_by", "submitted_at")
-    if sort_by == "zone":
-        sort_column = User.zone
-    elif sort_by == "user_grade":
+    # --- Sorting ---
+    sort_by = filters.get("sort_by", "created_at")
+    if sort_by == "user_grade":
         sort_column = User.grade
-    elif sort_by == "session_id":
-        sort_column = Application.session_id
     else:
         sort_column = getattr(Application, sort_by, Application.created_at)
     
@@ -232,6 +231,9 @@ async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: Appl
         query = query.order_by(asc(sort_column))
     else:
         query = query.order_by(desc(sort_column))
+    
+    # --- Pagination ---
+    query = query.offset(filters.get("skip", 0)).limit(filters.get("limit", 20))
     
     result = await db.execute(query)
     applications = result.scalars().all()
@@ -245,9 +247,6 @@ async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: Appl
 async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSession, user_id: UUID):
     """
     Submit a draft application for review.
-    
-    Authorization: chercheur only (own application)
-    Actions: Transitions DRAFT → SUBMITTED, runs eligibility check
     """
     user = await verify_chercheur_role(user_id, db)
     
@@ -284,6 +283,12 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
     application.submitted_at = datetime.today()
     
     try:
+        score = await calculate_score(db,user_id)
+        application.score = score
+        
+        # Automatically calculate indemnity budget for the submission
+        await generate_indemnity_for_application(application, db)
+        
         await db.commit()
         await db.refresh(application)
     except Exception as e:
@@ -296,7 +301,7 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
         return {
             "message": "Application submitted successfully",
             "id": str(application.id),
-            "eligibility_status": "eligible" if eligibility_result.is_eligible else "rejected",
+            "eligibility_status": "eligible" if eligibility_result.is_eligible else "non eligible",
             "verification_errors": eligibility_result.errors if eligibility_result.errors else None
         }
     except Exception as e:
@@ -304,12 +309,6 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
 
 
 async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest, db: AsyncSession, user_id: UUID):
-    """
-    Cancel an approved application by a researcher.
-
-    Authorization: chercheur only (own application)
-    Conditions: only approved applications can be cancelled by the applicant.
-    """
     user = await verify_chercheur_role(user_id, db)
 
     application = await db.get(Application, app_id)
@@ -328,11 +327,8 @@ async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest,
     if not data.reason or not data.reason.strip():
         raise HTTPException(status_code=400, detail="Cancellation reason is required")
 
-    application.status = Status.CANCELLED
+    application.status = Status.CANCELLATION_REQUEST
     application.cancellation_reason = data.reason.strip()
-    application.cancelled_at = datetime.now()
-    application.cancellation_requested_by = user.id
-    application.closed_at = datetime.now()
 
     try:
         await db.commit()
@@ -341,34 +337,151 @@ async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest,
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-    message = f"Application {application.id} has been cancelled by the researcher. Reason: {application.cancellation_reason}"
     try:
         await create_notification(
             db,
             user.id,
-            "Your application has been cancelled",
-            message,
+            "Cancellation Request Submitted",
+            "Your cancellation request has been submitted and is pending administrative review.",
             NotificationType.status_change,
             demande_id=application.id,
         )
         await notify_admins(
             db,
-            "Researcher cancelled an approved application",
-            message,
+            "New Cancellation Request",
+            f"Researcher {user.username} has requested to cancel an approved application ({application.id}).",
             NotificationType.status_change,
             demande_id=application.id,
         )
-    except Exception:
-        pass
+    except Exception as e :
+        raise HTTPException(status_code=500,detail=f"Internal server error: {str(e)}")
+    
+    return ApplicationResponse.model_validate(application)
+
+
+async def cancel_application_confirm(app_id: UUID, db: AsyncSession, user_id: UUID):
+    """Confirm a cancellation request (CS Admin only)"""
+    await verify_cs_admin_role(user_id, db)
+    
+    result = await db.execute(
+        select(Application).where(Application.id == app_id)
+    )
+    application = result.scalar_one_or_none()
+    
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+        
+    if application.status != Status.CANCELLATION_REQUEST:
+        raise HTTPException(
+            status_code=400, 
+            detail="Application must have a cancellation request before it can be confirmed"
+        )
+        
+    application.status = Status.CANCELLED
+    application.cancelled_at = datetime.now()
+    application.closed_at = datetime.now()
+    application.action_confirmation_by_id = user_id
+    
+    try:
+        await db.commit()
+        await db.refresh(application)
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    try:
+        await create_notification(
+            db,
+            application.user_id,
+            "Cancellation Confirmed",
+            f"Your application {application.id} cancellation has been confirmed.",
+            NotificationType.status_change,
+            demande_id=application.id,
+        )
+        await notify_admins(
+            db,
+            "Application Cancelled",
+            f"Application {application.id} cancellation request has been confirmed.",
+            NotificationType.status_change,
+            demande_id=application.id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=f"Internal server error: {str(e)}")
+
+    return {"message": "Application cancelled successfully", "id": str(application.id), "status": application.status}
+
+
+async def close_application(app_id: UUID, db: AsyncSession, user_id: UUID):
+    await verify_cs_admin_role(user_id, db)
+    
+    result = await db.execute(
+        select(Application).where(Application.id == app_id)
+    )
+    application = result.scalar_one_or_none()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+        
+    if application.status != Status.COMPLETED:
+        raise HTTPException(
+            status_code=400, 
+            detail="Application must have been COMPLETED before it can be closed"
+        )
+        
+    application.status = Status.CLOSED
+    application.closed_at = datetime.now()
+    application.action_confirmation_by_id = user_id
+
+    try:
+        await db.commit()
+        await db.refresh(application)
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    try:
+        await create_notification(
+            db,
+            application.user_id,
+            "Application Closed",
+            f"Your application {application.id} has been closed.",
+            NotificationType.status_change,
+            demande_id=application.id,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=f"Internal server error: {str(e)}")
 
     return ApplicationResponse.model_validate(application)
+
+async def flag(app_id: UUID, db: AsyncSession, flagReason:str,user_id: UUID):
+    await verify_cs_admin_role(user_id=user_id,db=db)
+    result = await db.execute(
+        select(Application).where(Application.id == app_id)
+    )
+    application = result.scalar_one_or_none()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    if application.status != Status.COMPLETED:
+        raise HTTPException(status_code=400, detail="the application report must be submitted before it can be flagged")
+    
+    application.status = Status.CORRECTION_NEEDED
+    try:
+        await create_notification(
+            db=db,
+            user_id=application.user_id,
+            title="FLAG ISSUED",
+            message=flagReason,
+            notification_type=NotificationType.status_change,
+            demande_id=app_id
+        )
+        return ApplicationResponse.model_validate(application)
+    except Exception as e: 
+        raise HTTPException(status_code=500,detail=f"Internal server error{str(e)}")
 
 
 async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
     """
     Delete a draft application.
-    
-    Authorization: chercheur only (own application)
     """
     user = await verify_chercheur_role(user_id, db)
     
@@ -402,7 +515,7 @@ async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
 
 async def get_current_session(db: AsyncSession):
     result = await db.execute(
-        select(Session).where(Session.is_open == True).where(Session.end_date >= date.today())
+        select(Session).where(Session.is_active == True , Session.is_open == True).where(Session.end_date >= date.today())
     )
     session = result.scalar_one_or_none()
     return session

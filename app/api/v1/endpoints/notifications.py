@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select , func
 import uuid
 from fastapi import APIRouter , Depends , HTTPException
 from app.core.database import AsyncSessionLocal
@@ -32,8 +32,8 @@ async def delete_Notification(notification_id:uuid.UUID,user:UserResponse=Depend
 
 @router.get("/count-unread", response_model=UnreadCountResponse)
 async def count_unread_notifications(user:UserResponse=Depends(get_current_user),db:AsyncSessionLocal=Depends(get_db)):
-      result= await db.execute(select(Notification).where(Notification.user_id==user.id,Notification.is_read==False))
-      unread_count=result.scalars().count()
+      result= await db.execute(select(func.count(Notification.id)).where(Notification.user_id==user.id,Notification.is_read==False))
+      unread_count=result.scalar_one()
       return UnreadCountResponse(unread_count=unread_count)
 
       

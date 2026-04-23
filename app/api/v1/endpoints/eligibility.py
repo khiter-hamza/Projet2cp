@@ -11,37 +11,14 @@ from typing import Annotated
 from app.core.database import AsyncSession, get_db
 from app.core.dependencies import get_current_user_id
 from app.services.application.eligibility_service import (
-    perform_eligibility_check,
-    get_eligibility_details
+    get_eligibility_details,
 )
 from app.schemas.eligibility import (
-    EligibilityCheckResult,
     EligibilityDetailedResponse
 )
 
 
 router = APIRouter()
-
-
-@router.post("/{application_id}/check-eligibility", response_model=EligibilityCheckResult)
-async def check_eligibility_endpoint(
-    application_id: UUID,
-    db: Annotated[AsyncSession, Depends(get_db)],
-    user_id: Annotated[UUID, Depends(get_current_user_id)]
-):
-    """
-    Perform eligibility verification on an application.
-    
-    This endpoint manually triggers the eligibility check (normally done automatically on submission).
-    Only the owner of the application or an admin can trigger this.
-    """
-    try:
-        result = await perform_eligibility_check(application_id, db, save=False)
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Eligibility check failed: {str(e)}")
 
 
 @router.get("/{application_id}/eligibility-details", response_model=EligibilityDetailedResponse)

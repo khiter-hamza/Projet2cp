@@ -14,10 +14,8 @@ class Idemnity(Base):
     id  = Column(UUID(as_uuid=True) ,primary_key=True , default=uuid4  ,index=True )
     date  = Column(Date , nullable=False)
     zone_id = Column(UUID ,ForeignKey("zones.id"))
-    budjet = Column(Integer)
+    budget = Column(Integer)
     app_id = Column(UUID , ForeignKey("applications.id"))
     
     application = relationship("Application", back_populates="idemnities")
     zone = relationship("Zone", back_populates="idemnities")
- 
-  

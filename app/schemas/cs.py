@@ -20,12 +20,12 @@ from app.models.enums import CSDecision, Status, StageType, UserGrade, Countries
 
 class CSDecisionRequest(BaseModel):
     """Request body for CS decision (approve/reject)"""
-    decision: str = Field(..., description="'approuve' or 'rejete'")
+    decision: str = Field(..., description="'approved' or 'rejeted'")
     notes: Optional[str] = Field(None, description="Additional notes or rejection reason")
     
     class Config:
         example = {
-            "decision": "approuve",
+            "decision": "approved",
             "notes": "Excellent candidate, highly recommended"
         }
 

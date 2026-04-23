@@ -20,15 +20,21 @@ async def create_session(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "admin_dpgr":
+    if user.role.value != "assistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
     if data.start_date >= data.end_date:
         raise HTTPException(status_code=400, detail="start_date must be before end_date")
     if data.end_date < date.today():
         raise HTTPException(status_code=400, detail="end_date must be in the future")
-
-    await db.execute(update(Session).values(is_active=False))
-
+    try:    
+        await db.execute(update(Session).values(is_active=False,is_open=False))
+        #applications_to_be_removed 
+        #application_to_be_expired
+        #HAMAIDI IMPLEMENT THIS
+        await db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"internal server error {str(e)}")
     new_session = Session(
         name=data.name,
         academic_year=data.academic_year,
@@ -49,7 +55,7 @@ async def list_sessions(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "admin_dpgr":
+    if user.role.value != "assistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
     result = await db.execute(select(Session).order_by(Session.created_at.desc()))
     return result.scalars().all()
@@ -72,13 +78,14 @@ async def get_session(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "admin_dpgr":
+    if user.role.value != "assistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
     session = await db.get(Session, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
 
+#to be deleted
 
 @router.patch("/{session_id}", response_model=SessionResponse)
 async def update_session(
@@ -87,7 +94,7 @@ async def update_session(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "admin_dpgr":
+    if user.role.value != "assistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
     session = await db.get(Session, session_id)
     if not session:
@@ -121,7 +128,7 @@ async def delete_session(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "admin_dpgr":
+    if user.role.value != "assistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
     session = await db.get(Session, session_id)
     if not session:

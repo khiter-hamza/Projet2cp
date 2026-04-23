@@ -203,7 +203,7 @@ print_success "Document uploaded: $DOC_ID"
 echo "$UPLOAD_RESPONSE" | jq '.'
 
 print_info "Getting documents..."
-curl -s -X GET "$BASE_URL/applications/$APP_ID/documments" \
+curl -s -X GET "$BASE_URL/applications/$APP_ID/documents" \
   -H "Authorization: Bearer $RESEARCHER_TOKEN" | jq '.'
 print_success "Documents retrieved"
 

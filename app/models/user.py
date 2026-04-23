@@ -1,4 +1,4 @@
-from sqlalchemy import Column , Integer , String , Enum , ForeignKey
+from sqlalchemy import Column , Integer , String , Enum , ForeignKey , Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from uuid import uuid4
@@ -18,6 +18,7 @@ class User(Base):
     grade = Column(Enum(UserGrade),  default = UserGrade.doctorant_non_salarie)
     # keep the column name that exists in the DB ('anciente')
     anciente = Column(Integer , default = 0)
+    is_active = Column(Boolean , default=True)
     laboratory_id = Column(UUID(as_uuid=True) , ForeignKey("laboratories.id"), nullable=False)
     
     laboratory = relationship("Laboratory", back_populates="users")

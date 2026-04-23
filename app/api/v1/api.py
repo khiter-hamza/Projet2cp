@@ -10,7 +10,6 @@ from app.api.v1.endpoints import sessions
 from app.api.v1.endpoints import documents
 from app.api.v1.endpoints import applications
 from app.api.v1.endpoints import eligibility
-from app.api.v1.endpoints import evaluation
 from app.api.v1.endpoints import idemnity
 from app.api.v1.endpoints import cs
 from app.api.v1.endpoints import dashboard
@@ -33,7 +32,6 @@ api_router.include_router(applications.router , prefix="/applications" , tags=["
 api_router.include_router(documents.router, prefix="", tags=["documents"])
 api_router.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
 api_router.include_router(eligibility.router, prefix="/applications", tags=["eligibility"])
-api_router.include_router(evaluation.router, prefix="/evaluation", tags=["scoring"])
 api_router.include_router(idemnity.app , prefix="/idemnity" , tags=["budjet and zones"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(cs.router, prefix="/cs", tags=["cs-operations"])

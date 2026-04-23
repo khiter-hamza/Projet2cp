@@ -4,7 +4,7 @@ Authorization Helpers - Role-Based Access Control
 Provides centralized authorization checks for all services:
 - chercheur:      Can manage own applications
 - admin_dpgr:     CS admin - can manage all applications, deliberations
-- asistant_dpgr:  CS assistant - can manage all applications, deliberations  
+- assistant_dpgr:  CS assistant - can manage all applications, deliberations  
 - super_admin:    Only for user/system management (create/delete/edit users, settings)
 """
 
@@ -50,7 +50,7 @@ async def verify_chercheur_role(user_id: UUID, db: AsyncSession) -> User:
 
 async def verify_cs_admin_role(user_id: UUID, db: AsyncSession) -> User:
     """
-    Verify user is CS admin (admin_dpgr or asistant_dpgr).
+    Verify user is CS admin (admin_dpgr or assistant_dpgr).
     Super admin is NOT included - use super_admin verifier for admin operations.
     
     Args:
@@ -65,11 +65,10 @@ async def verify_cs_admin_role(user_id: UUID, db: AsyncSession) -> User:
     """
     user = await verify_user_exists(user_id, db)
     
-    if user.role not in [UserRole.admin_dpgr, UserRole.asistant_dpgr]:
+    if user.role not in [UserRole.admin_dpgr, UserRole.assistant_dpgr]:
         raise HTTPException(
             status_code=403,
-            detail="CS operations require admin_dpgr or asistant_dpgr role"
-        )
+            detail="CS operations require admin_dpgr or assistant_dpgr role"        )
     
     return user
 
@@ -122,7 +121,7 @@ async def verify_cs_admin_or_chercheur(user_id: UUID, db: AsyncSession) -> User:
     """
     user = await verify_user_exists(user_id, db)
     
-    allowed_roles = [UserRole.chercheur, UserRole.admin_dpgr, UserRole.asistant_dpgr]
+    allowed_roles = [UserRole.chercheur, UserRole.admin_dpgr, UserRole.assistant_dpgr]
     if user.role not in allowed_roles:
         raise HTTPException(
             status_code=403,

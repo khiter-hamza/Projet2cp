@@ -6,7 +6,7 @@ This document lists the correct enum values required by the API endpoints.
 Use one of these values for the `role` field when registering users:
 
 - `chercheur` - Regular researcher/user
-- `asistant_dpgr` - Assistant department manager
+- `assistant_dpgr` - Assistant department manager
 - `admin_dpgr` - Admin department manager
 - `super_admin` - Super administrator
 
@@ -175,7 +175,7 @@ curl -X POST http://localhost:8000/api/v1/applications/ \
 
 ## Troubleshooting
 
-### Error: "Input should be 'chercheur', 'asistant_dpgr', 'admin_dpgr' or 'super_admin'"
+### Error: "Input should be 'chercheur', 'assistant_dpgr', 'admin_dpgr' or 'super_admin'"
 This means you're using an incorrect role value. Use one of the correct values listed above.
 
 ### Error: "Input should be 'professeur', 'mca_a', 'mca_b', 'enseignant_chercheur', 'doctorant_salarie' or 'doctorant_non_salarie'"

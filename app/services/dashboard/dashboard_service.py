@@ -24,6 +24,8 @@ async def get_researcher_current_application(user_id: str, db: AsyncSession) -> 
         .options(selectinload(Application.documents))
         .where(Application.user_id == user.id)
         .where(Application.session_id == current_session.id)
+        .order_by(desc(Application.created_at))
+        .limit(1)
     )
     application = result.scalar_one_or_none()
     return ApplicationResponse.model_validate(application) if application else None
@@ -48,6 +50,8 @@ async def get_researcher_dashboard(user_id: str, db: AsyncSession):
         .options(selectinload(Application.documents))
         .where(Application.user_id == user.id)
         .where(Application.session_id == current_session.id)
+        .order_by(desc(Application.created_at))
+        .limit(1)
     )
     application = result.scalar_one_or_none()
     
@@ -161,11 +165,11 @@ async def get_admin_dashboard(user_id: str, db: AsyncSession, filters: AdminDash
         # Other counts
         if app.is_eligible:
             eligible_count += 1
-        if app.cs_decision == CSDecision.approuve:
+        if app.cs_decision == CSDecision.approved:
             approved_count += 1
-        elif app.cs_decision == CSDecision.rejete:
+        elif app.cs_decision == CSDecision.rejected:
             rejected_count += 1
-        if app.status == Status.CS_PREPARATION:
+        if app.status == Status.SUBMITTED:
             pending_cs_count += 1
         
         # Budget tracking (only for approved applications)
@@ -225,7 +229,7 @@ async def get_cs_dashboard(user_id: str, db: AsyncSession):
         select(Application)
         .options(selectinload(Application.documents))
         .where(Application.session_id == current_session.id)
-        .where(Application.status == Status.CS_PREPARATION)
+        .where(Application.status == Status.SUBMITTED)
         .order_by(desc(Application.score))
     )
     applications = result.scalars().all()
@@ -273,7 +277,7 @@ async def get_statistics(db: AsyncSession):
     # Total funding allocated (sum of calculated_fees for approved applications)
     result = await db.execute(
         select(func.sum(Application.calculated_fees))
-        .where(Application.cs_decision == CSDecision.approuve)
+        .where(Application.cs_decision == CSDecision.approved)
     )
     total_funding_allocated = result.scalar() or 0
     

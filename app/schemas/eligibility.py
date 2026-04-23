@@ -7,7 +7,6 @@ from typing import Optional, List
 class EligibilityCheckResult(BaseModel):
     """Result of eligibility verification"""
     is_eligible: bool
-    verified_at: datetime
     
     # Details
     eligible_by_grade: bool
@@ -48,11 +47,7 @@ class EligibilityDetailedResponse(BaseModel):
     """Complete eligibility check response"""
     application_id: UUID
     is_eligible: bool
-    verified_at: datetime
-    
-    grade_check: dict  # {eligible: bool, message: str}
-    history_check: HistoryCheckDetail
-    document_check: DocumentCheckDetail
+    verified_at: Optional[datetime] = None
     
     errors: List[str]
     
