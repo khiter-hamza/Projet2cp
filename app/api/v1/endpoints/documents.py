@@ -50,20 +50,6 @@ async def upload_document(    application_id: uuid.UUID,    document_type: Docum
     db.add(new_document)
     await db.commit()
     await db.refresh(new_document)
-    if document_type == Documents_type.report:
-        app = await db.get(Application, application_id)
-        if app:
-            app.stage_report_submitted = True
-            now = datetime.utcnow()
-            app.stage_report_submitted_at = now
-            app.stage_report_id = new_document.id
-            
-            # Transition to COMPLETED if it was APPROVED
-            if app.status == Status.APPROVED:
-                app.status = Status.COMPLETED
-                app.completed_at = now
-                
-            await db.commit()
 
     return new_document
 

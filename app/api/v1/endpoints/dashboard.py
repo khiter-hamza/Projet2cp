@@ -8,7 +8,7 @@ from app.schemas.application import ApplicationResponse
 from uuid import UUID
 
 router = APIRouter()
-
+#not fixed yet
 @router.get("/researcher", response_model=ResearcherDashboardResponse)
 async def get_researcher_dashboard_endpoint(
     db: AsyncSession = Depends(get_db),

@@ -142,7 +142,7 @@ async def updateDraft(app_id: UUID, data: ApplicationUpsert, db: AsyncSession, u
     
     return ApplicationResponse.model_validate(draft)
 
-
+#not full version of list applications
 async def listApplications(db: AsyncSession, user_id: UUID, appFilterQuery: ApplicationFilterParams ):
     """
     List applications with pagination and advanced filtering.
@@ -451,6 +451,32 @@ async def close_application(app_id: UUID, db: AsyncSession, user_id: UUID):
         raise HTTPException(status_code=500,detail=f"Internal server error: {str(e)}")
 
     return ApplicationResponse.model_validate(application)
+
+async def flag(app_id: UUID, db: AsyncSession, flagReason:str,user_id: UUID):
+    await verify_cs_admin_role(user_id=user_id,db=db)
+    result = await db.execute(
+        select(Application).where(Application.id == app_id)
+    )
+    application = result.scalar_one_or_none()
+    if not application:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    if application.status != Status.COMPLETED:
+        raise HTTPException(status_code=400, detail="the application report must be submitted before it can be flagged")
+    
+    application.status = Status.CORRECTION_NEEDED
+    try:
+        await create_notification(
+            db=db,
+            user_id=application.user_id,
+            title="FLAG ISSUED",
+            message=flagReason,
+            notification_type=NotificationType.status_change,
+            demande_id=app_id
+        )
+        return ApplicationResponse.model_validate(application)
+    except Exception as e: 
+        raise HTTPException(status_code=500,detail=f"Internal server error{str(e)}")
 
 
 async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
