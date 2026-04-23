@@ -5,7 +5,7 @@ from app.core.database import AsyncSessionLocal
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.user import CreateUser , UserResponse, forget_User, reset_Password
-from app.services.user.user_service import create_user , get_users , get_user , update_user
+from app.services.user.user_service import create_user , get_users , get_user , update_user,google_callbackk
 
 
 router = APIRouter()  
@@ -44,3 +44,13 @@ async def reset_password_endpoint(token:str,new_password: str, db: AsyncSessionL
 @router.get("/reset-password/{token}")
 async def verify_reset_token_endpoint(token: str, db: AsyncSessionLocal = Depends(get_db)):
     return await verify_token_url(token, db)
+
+@app.get("/auth/google") #  for opening the  onglet of the Outh with google
+async def login_google(request: Request):
+    redirect_uri = request.url_for("google_callback")
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+@app.get("/auth/google/callback") #called by google services 
+async def auth_google_callback(request: Request,db:AsyncSessionLocal = Depends(get_db),name="google_callback"):
+    return await google_callbackk(request,db)
+    

@@ -42,7 +42,7 @@ class Application(Base):
 
     calculated_fees = Column(Float)
     session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
-
+    
     
     
     cancellation_reason = Column(Text)
