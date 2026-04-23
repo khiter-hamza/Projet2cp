@@ -3,17 +3,20 @@
 
 import os
 import uuid
+from pathlib import Path
 
 
-from Projet2cp.app.schemas.application import ApplicationResponse
-from Projet2cp.app.schemas.user import UserResponse
+from app.models.user import User
+from app.schemas.application import ApplicationResponse
+from app.schemas.user import UserResponse
 from num2words import num2words
 from docxtpl import DocxTemplate
 from app.models.document import Document
 from app.core.database import AsyncSession, AsyncSessionLocal
 from datetime import datetime
-async def  create_attestation(db:AsyncSessionLocal,user:UserResponse,application:ApplicationResponse):
- doc = DocxTemplate("Projet2cp\app\utils\pdf\Attestation1.docx")
+async def  create_attestation(db:AsyncSessionLocal,user_id:uuid.UUID,application:ApplicationResponse):
+ template_path = Path(__file__).resolve().parents[2] / "utils" / "pdf" / "Attestation1.docx"
+ doc = DocxTemplate(str(template_path))
  data = {
     "id": 12,
 
@@ -38,7 +41,8 @@ async def  create_attestation(db:AsyncSessionLocal,user:UserResponse,application
 
     "date_now": datetime.utcnow().strftime("%d/%m/%Y"),
 }
- #build_attestation_data(user,application) 
+ user = await db.get(User, user_id)
+ data.update(build_attestation_data(user, application))
  doc.render(data) #render the daynamic data in the template
  save_dir = f"generated/attestations/{application.id}" #create a directory for the application if it doesn't exist
  os.makedirs(save_dir, exist_ok=True)
@@ -62,35 +66,39 @@ async def  create_attestation(db:AsyncSessionLocal,user:UserResponse,application
  #update the application with the attestation information this is for the front end to know that the attestation is submitted and it can show the download button for the attestation and it can also show the date of submission of the attestation
  application.attestation_id = new_document.id
  application.attestation_submitted = True
- application.attestation_submitted_at = new_document.uploaded_at
+ uploaded_at = new_document.uploaded_at
+ if uploaded_at is not None and uploaded_at.tzinfo is not None:
+     uploaded_at = uploaded_at.replace(tzinfo=None)
+ application.attestation_submitted_at = uploaded_at
  await db.commit()
  return new_document
 
 def dzd_to_words(amount: int) -> str:
     return num2words(amount, lang='fr').capitalize() + " dinars algériens" 
 def build_attestation_data(user:UserResponse, application:ApplicationResponse):
+    duration_days = (application.end_date - application.start_date).days + 1
 
     return {
         "id": application.id,
 
-        "username": user.firstname,
+        "username": user.username,
         "last_name": user.lastname,
 
-        "birth_day": user.birth_date.strftime("%d/%m/%Y"),
-        "birth_place": user.birth_place,
+        #"birth_day": user.birth_date.strftime("%d/%m/%Y"),
+        #"birth_place": user.birth_place,
 
-        "nbr_jour": application.duration,
+        "nbr_jour": duration_days,
 
-        "destination": application.country,
-        "etablissment": application.establishment,
+        "destination": application.destination_country,
+        #"etablissment": application.establishment,
 
         "begin": application.start_date.strftime("%d/%m/%Y"),
         "end": application.end_date.strftime("%d/%m/%Y"),
 
-        "budget": f"{application.budget:,}".replace(",", " ") + " DA",
-        "budget_words": dzd_to_words(application.budget),
+        "budget": f"{application.calculated_fees:,}".replace(",", " ") + " DA",
+        "budget_words": dzd_to_words(application.calculated_fees),
 
-        "frais_inscription": f"{application.fees:,}".replace(",", " ") + " DA",
+       # "frais_inscription": f"{application.fees:,}".replace(",", " ") + " DA",
 
         "date_now": datetime.utcnow().strftime("%d/%m/%Y"),
     }

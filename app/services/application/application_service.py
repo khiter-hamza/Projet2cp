@@ -4,7 +4,9 @@ from uuid import UUID
 from datetime import datetime, date
 from pydantic import ValidationError
 from sqlalchemy import select, func, desc, asc, or_, String
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload
+
+
 from app.core.database import AsyncSession
 from app.schemas.application import *
 from app.models.application import Application
@@ -45,9 +47,7 @@ async def getCurrentApplication(db: AsyncSession, user_id: UUID):
 
 
 async def getUserApplication(app_id: UUID, user_id: UUID, db: AsyncSession):
-    """
-    Get an application. detail view.
-    """
+  
     user = await verify_cs_admin_or_chercheur(user_id, db)
     
     result = await db.execute(
@@ -261,7 +261,7 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
         raise HTTPException(status_code=404, detail="Application not found")
     
     # Verify ownership
-    await verify_ownership(application.user_id, user_id)
+    await verify_ownership(application.user_id, user.id)
     
     # Verify session
     if application.session_id != current_session.id:
@@ -283,7 +283,7 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
     application.submitted_at = datetime.today()
     
     try:
-        score = await calculate_score(db,user_id)
+        score = await calculate_score(db,user.id)
         application.score = score
         
         # Automatically calculate indemnity budget for the submission
@@ -291,11 +291,21 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
         
         await db.commit()
         await db.refresh(application)
+        message = f"Your application  has been submitted successfully."
+        await create_notification(
+            db,
+            user_id,
+            "Application Submitted",
+            message,
+            NotificationType.status_change,
+            demande_id=application.id,
+        )
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
     
     # Run automatic eligibility verification
+     
     try:
         eligibility_result = await perform_eligibility_check(application.id, db)
         return {
@@ -329,6 +339,7 @@ async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest,
 
     application.status = Status.CANCELLATION_REQUEST
     application.cancellation_reason = data.reason.strip()
+    application.cancelled_requested_at = datetime.now()
 
     try:
         await db.commit()
@@ -340,7 +351,7 @@ async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest,
     try:
         await create_notification(
             db,
-            user.id,
+            user_id,
             "Cancellation Request Submitted",
             "Your cancellation request has been submitted and is pending administrative review.",
             NotificationType.status_change,
@@ -349,7 +360,7 @@ async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest,
         await notify_admins(
             db,
             "New Cancellation Request",
-            f"Researcher {user.username} has requested to cancel an approved application ({application.id}).",
+            f"Researcher {user.username} {user.lastname} has requested to cancel an approved application ({application.id}).",
             NotificationType.status_change,
             demande_id=application.id,
         )
@@ -364,7 +375,7 @@ async def cancel_application_confirm(app_id: UUID, db: AsyncSession, user_id: UU
     await verify_cs_admin_role(user_id, db)
     
     result = await db.execute(
-        select(Application).where(Application.id == app_id)
+        select(Application).options(joinedload(Application.user)).where(Application.id == app_id)
     )
     application = result.scalar_one_or_none()
     
@@ -394,14 +405,14 @@ async def cancel_application_confirm(app_id: UUID, db: AsyncSession, user_id: UU
             db,
             application.user_id,
             "Cancellation Confirmed",
-            f"Your application {application.id} cancellation has been confirmed.",
+            f"Your application  cancellation has been confirmed.",
             NotificationType.status_change,
             demande_id=application.id,
         )
         await notify_admins(
             db,
             "Application Cancelled",
-            f"Application {application.id} cancellation request has been confirmed.",
+            f" cancellation request of {application.user.username} {application.user.lastname}  has been confirmed,Application ID: {application.id}.",
             NotificationType.status_change,
             demande_id=application.id,
         )
@@ -413,9 +424,9 @@ async def cancel_application_confirm(app_id: UUID, db: AsyncSession, user_id: UU
 
 async def close_application(app_id: UUID, db: AsyncSession, user_id: UUID):
     await verify_cs_admin_role(user_id, db)
-    
+
     result = await db.execute(
-        select(Application).where(Application.id == app_id)
+        select(Application).options(joinedload(Application.user)).where(Application.id == app_id)
     )
     application = result.scalar_one_or_none()
     if not application:
@@ -443,10 +454,11 @@ async def close_application(app_id: UUID, db: AsyncSession, user_id: UUID):
             db,
             application.user_id,
             "Application Closed",
-            f"Your application {application.id} has been closed.",
+            f"Your application  has been closed.",
             NotificationType.status_change,
             demande_id=application.id,
         )
+        await notify_admins(db, "Application Closed", f"Application of {application.username} {application.first_name} has been closed, Application ID: {application.id}", NotificationType.status_change, demande_id=application.id)
     except Exception as e:
         raise HTTPException(status_code=500,detail=f"Internal server error: {str(e)}")
 
@@ -465,12 +477,14 @@ async def flag(app_id: UUID, db: AsyncSession, flagReason:str,user_id: UUID):
         raise HTTPException(status_code=400, detail="the application report must be submitted before it can be flagged")
     
     application.status = Status.CORRECTION_NEEDED
+    await db.commit()
     try:
+        message = f"Your application Report needs correction. Reason: {flagReason}"
         await create_notification(
             db=db,
             user_id=application.user_id,
-            title="FLAG ISSUED",
-            message=flagReason,
+            title="Report must be modified",
+            message=message,
             notification_type=NotificationType.status_change,
             demande_id=app_id
         )

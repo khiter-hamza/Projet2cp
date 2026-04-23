@@ -9,20 +9,10 @@ from uuid import UUID
 from typing import Annotated
 from fastapi import HTTPException , Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from authlib.integrations.starlette_client import OAuth
 from starlette.responses import RedirectResponse
+from fastapi import Request
 
-oauth = OAuth()
 
-oauth.register(
-    name="google",
-    client_id="YOUR_CLIENT_ID",
-    client_secret="YOUR_CLIENT_SECRET",
-    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-    client_kwargs={
-        "scope": "openid email profile"
-    }
-)
 
 security = HTTPBearer()
 async def register_user(user : CreateUser , db : AsyncSessionLocal) -> UserResponse :
@@ -88,7 +78,7 @@ async def login_user(user : UserLogin , db : AsyncSession ) :
 async def google_callbackk(request: Request ,db:AsyncSession ):
     token = await oauth.google.authorize_access_token(request)
     user_info = await oauth.google.parse_id_token(request, token)
-    if  not user_info["email_verified"]
+    if  not user_info["email_verified"]:
      raise HTTPException(status=401,detail="user not authorized") 
     result = await db.execute(select(User).where(User.email == user.email))
     userdb = result.scalar_one_or_none()

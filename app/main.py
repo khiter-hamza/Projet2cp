@@ -3,7 +3,7 @@ import asyncio
 import logging
 import traceback
 from datetime import date
-from Projet2cp.app.models.enums import Status
+from app.models.enums import Status
 from sqlalchemy.orm import joinedload
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse

@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 from uuid import uuid4
 from app.core.database import Base
 from app.models.enums import *
+from app.models.indemnity_calculation import Idemnity
 from datetime import datetime
 class Application(Base):
     __tablename__ = "applications"
@@ -53,6 +54,7 @@ class Application(Base):
     rejected_at = Column(DateTime, index=True)
     completed_at = Column(DateTime)#can be removed
     closed_at = Column(DateTime)
+    cancelled_requested_at = Column(DateTime)
     cancelled_at = Column(DateTime)
     user = relationship(
         "User",
@@ -63,7 +65,7 @@ class Application(Base):
 
 
     session = relationship("Session", back_populates="applications")
-    idemnities = relationship("Idemnity" , back_populates="application")
+    idemnities = relationship(Idemnity, back_populates="application")
     documents = relationship(
     "Document",
     back_populates="application",

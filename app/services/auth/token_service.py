@@ -2,8 +2,8 @@ import uuid
 from datetime import datetime
 import secrets
 
-from Projet2cp.app.core.database import AsyncSessionLocal
-from Projet2cp.app.models.password_reset_token import PasswordResetToken
+from app.core.database import AsyncSessionLocal
+from app.models.password_reset_token import PasswordResetToken
 
 
 def create_token_url(db: AsyncSessionLocal, user_id: uuid.UUID) -> str:

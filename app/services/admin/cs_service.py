@@ -1,6 +1,7 @@
 
 from uuid import UUID
 from datetime import datetime
+from app.services.document.document_service import create_attestation
 from sqlalchemy import select, and_, desc ,asc
 from sqlalchemy.orm import joinedload
 from fastapi import HTTPException
@@ -30,8 +31,11 @@ async def approve_application(
     # Verify CS admin access
     user = await verify_cs_admin_role(user_id, db)
     
-    application = await db.get(Application, application_id)
-    
+    application = await db.execute(
+        select(Application).where(Application.id == application_id).options(joinedload(Application.user))
+    )
+    application = application.scalar_one_or_none()
+
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
     
@@ -52,6 +56,11 @@ async def approve_application(
         await db.commit()
         await db.refresh(application)
         
+        #creating an attestation
+        attestation = await create_attestation(db, application.user_id, application)
+        if not attestation:
+            raise HTTPException(status_code=500, detail="Failed to create attestation")
+
         # Calculate and create indemnity if not exists
         existing_indemnity = await db.execute(
             select(Idemnity).where(Idemnity.app_id == application_id)
@@ -64,13 +73,13 @@ async def approve_application(
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-    message = f"Application {application.id} has been approved by the Scientific Council. Notes: {notes or 'No additional notes.'}"
+    message = f"Application of {application.user.username} {application.user.lastname} has been approved by the Scientific Council , Aplication_id: {application.id}. Notes: {notes or 'No additional notes.'}"
     try:
         await create_notification(
             db,
             application.user_id,
-            "Your application has been approved",
-            message,
+            "Application approved",
+            "Your application has been approved by the Scientific Council. " ,
             NotificationType.cs_decision,
             demande_id=application.id,
         )
@@ -126,7 +135,8 @@ async def reject_application(
     # Verify CS admin access
     user = await verify_cs_admin_role(user_id, db)
     
-    application = await db.get(Application, application_id)
+    application = await db.execute(
+        select(Application).where(Application.id == application_id).options(joinedload(Application.user)))   
     
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -151,7 +161,7 @@ async def reject_application(
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-    message = f"Application {application.id} has been rejected by the Scientific Council. Reason: {rejection_reason}"
+    message = f"Application of {application.user.username} {application.user.lastname} has been rejected by the Scientific Council , Aplication_id: {application.id}. Reason: {rejection_reason}"
     try:
         await create_notification(
             db,

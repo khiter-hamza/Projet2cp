@@ -138,7 +138,7 @@ async def delete_session(
     return {"detail": "Session deleted"}
 
 @router.patch('/{session_id}') # for douaa
-def close_session(session_id: uuid.UUID,
+async def close_session(session_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)):
     if user.role.value != "admin_dpgr":
@@ -148,5 +148,5 @@ def close_session(session_id: uuid.UUID,
         raise HTTPException(status_code=404, detail="Session not found")
     session.is_active=False
     await db.commit()
-     return session
+    return session
 

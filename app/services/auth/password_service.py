@@ -1,17 +1,17 @@
-from Projet2cp.app.services.auth.token_service import create_token_url
+from app.services.auth.token_service import create_token_url
 import secrets
 from datetime import datetime
 from sqlalchemy import select
-from Projet2cp.app.core.database import AsyncSessionLocal
-from Projet2cp.app.models.password_reset_token import PasswordResetToken
-from Projet2cp.app.models.user import User
+from app.core.database import AsyncSessionLocal
+from app.models.password_reset_token import PasswordResetToken
+from app.models.user import User
 from app.schemas.user import forget_User , reset_Password
 from sqlalchemy.orm import joinedload
 from fastapi_mail import FastMail, MessageSchema
 from fastapi import BackgroundTasks
-from app.core.config import conf
 
-from app.services.auth.hashing import hash_password
+
+from app.core.security import hash_password
 
 
 from fastapi_mail import ConnectionConfig

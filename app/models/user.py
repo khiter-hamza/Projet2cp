@@ -24,4 +24,5 @@ class User(Base):
     laboratory = relationship("Laboratory", back_populates="users")
     notifications = relationship("Notification", back_populates="user")
     applications = relationship("Application",back_populates="user",foreign_keys="[Application.user_id]",cascade="all, delete-orphan")
+    password_reset_tokens = relationship("PasswordResetToken", back_populates="user", cascade="all, delete-orphan")
     

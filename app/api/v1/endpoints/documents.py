@@ -27,31 +27,65 @@ UPLOAD_DIR = "uploads/documents"
 
 @router.post('/applications/{application_id}/documents', response_model=DocumentResponse)
 async def upload_document(    application_id: uuid.UUID,    document_type: Documents_type = Form(...),    file: UploadFile = File(...),    user=Depends(get_current_user),    db: AsyncSession = Depends(get_db),):
-   
-    contents = await file.read()
+    try:
+        app=await db.get(Application,application_id)
+        if not app:
+            raise HTTPException(status_code=404,detail="Application not found")
+        if app.status == Status.CANCELLED:
+            raise HTTPException(status_code=400,detail="You can't upload a document for a cancelled application")
+        
+        if document_type == Documents_type.report:# this set the stage_report_submitted to true and set the stage_report_id to the new document id and set the stage_report_submitted_at to the current date and time this is for the front end to know that the report is submitted and it can show the download button for the report and it can also show the date of submission of the report
+           if app.status != Status.APPROVED and app.status != Status.CORRECTION_NEEDED:
+               raise HTTPException(status_code=400,detail="You can't submit a report for an application that is not approved")
+           if app.stage_report_submitted:
+               raise HTTPException(status_code=400,detail="You have already submitted a report for this application")
+      
+        document = await db.execute(select(Document).where(Document.application_id == application_id, Document.document_type == document_type))
+        document_exists = document.scalar_one_or_none()
+        if document_exists :
+            raise HTTPException(status_code=400, detail=f"A document of type {document_type} already exists for this application")
+        contents = await file.read()
+        if len(contents) == 0:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
+        if len(contents) > 10 * 1024 * 1024:  # Limit file size to 10MB
+            raise HTTPException(status_code=400, detail="File size exceeds the 10MB limit")
+        ext = os.path.splitext(file.filename)[1]
+        unique_name = f"{uuid.uuid4()}{ext}"
+        save_dir = os.path.join(UPLOAD_DIR, str(application_id))
+        os.makedirs(save_dir, exist_ok=True)
+        file_path = os.path.join(save_dir, unique_name)
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        new_document = Document(
+            application_id=application_id,
+            document_type=document_type,
+            file_path=file_path,
+            file_name=file.filename,
+            file_size=len(contents),
+            mime_type=file.content_type,
+            user_id=user.id
+        )
+        db.add(new_document)
+        await db.commit()
+        await db.refresh(new_document)
+        if document_type == Documents_type.report:# this set the stage_report_submitted to true and set the stage_report_id to the new document id and set the stage_report_submitted_at to the current date and time this is for the front end to know that the report is submitted and it can show the download button for the report and it can also show the date of submission of the report
+           uploaded_at = new_document.uploaded_at
+           if uploaded_at is not None and uploaded_at.tzinfo is not None:
+               uploaded_at = uploaded_at.replace(tzinfo=None)
+           app.stage_report_submitted_at = uploaded_at
+           app.stage_report_id = new_document.id
+           app.stage_report_submitted = True
+           app.status = Status.COMPLETED
+           app.completed_at = datetime.utcnow()
+           await db.commit()
 
-   
-    ext = os.path.splitext(file.filename)[1]  
-    unique_name = f"{uuid.uuid4()}{ext}"
-    save_dir = os.path.join(UPLOAD_DIR, str(application_id))
-    os.makedirs(save_dir, exist_ok=True)
-    file_path = os.path.join(save_dir, unique_name)
-    with open(file_path, "wb") as f:
-        f.write(contents)
-    new_document = Document(
-        application_id=application_id,
-        document_type=document_type,
-        file_path=file_path,
-        file_name=file.filename,
-        file_size=len(contents),
-        mime_type=file.content_type,
-        user_id=user.id
-    )
-    db.add(new_document)
-    await db.commit()
-    await db.refresh(new_document)
-
-    return new_document
+        return new_document
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get('/applications/{application_id}/documents',response_model=list[DocumentResponse])
@@ -63,52 +97,93 @@ async def get_documents(application_id:uuid.UUID,db:AsyncSession=Depends(get_db)
             raise HTTPException(status_code=404, detail='No document found with this demmende_id')
         return documents
     except HTTPException:
+        await db.rollback()
         raise
     except Exception as e:
-        print(e)
+        await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
    
 @router.delete('/document/{idd}')
 async def delete_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
-   res=await db.execute(select(Document).where(Document.id==idd,Document.user_id==user.id))
-   document=res.scalar_one_or_none()
-   if not document:
-      raise HTTPException(status_code=404,detail='document not found')
-   if document.document_type == Documents_type.report:# this set the stage_report_submitted to true and set the stage_report_id to the new document id and set the stage_report_submitted_at to the current date and time this is for the front end to know that the report is submitted and it can show the download button for the report and it can also show the date of submission of the report
-       app=await db.get(Application,document.application_id)
-       app.stage_report_submitted = False
-       app.stage_report_id = None
-       app.stage_report_submitted_at = None
-       await db.commit()
-   if document.document_type == Documents_type.attestation:# this set the attestation_submitted to true and set the attestation_id to the new document id and set the attestation_submitted_at to the current date and time this is for the front end to know that the attestation is submitted and it can show the download button for the attestation and it can also show the date of submission of the attestation
-       app=await db.get(Application,document.application_id)
-       app.attestation_submitted = False
-       app.attestation_id = None
-       app.attestation_submitted_at = None
-       await db.commit()    
-   await db.delete(document)
-   await db.commit()
-   return  {"details":"Document deleted succussfuly"} 
+    try:
+        res=await db.execute(select(Document).where(Document.id==idd,Document.user_id==user.id))
+        document=res.scalar_one_or_none()
+        if not document:
+            raise HTTPException(status_code=404,detail='document not found')
+        file_path = document.file_path
+        if document.document_type == Documents_type.report:# this set the stage_report_submitted to true and set the stage_report_id to the new document id and set the stage_report_submitted_at to the current date and time this is for the front end to know that the report is submitted and it can show the download button for the report and it can also show the date of submission of the report
+             app=await db.get(Application,document.application_id)
+             if app.status != Status.CORRECTION_NEEDED and app.status != Status.COMPLETED:
+                  raise HTTPException(status_code=400,detail="You can't delete a report for an application that is not in correction needed status")
+             app.stage_report_submitted = False
+             app.stage_report_id = None
+             app.stage_report_submitted_at = None
+             if app.status == Status.COMPLETED:# if the status is completed it means that the report was submitted and the cs approved the application but now the user want to delete the report so we need to change the status back to approved because the report is deleted and we need to wait for the user to submit a new report and for the cs to approve it again
+                 app.status = Status.APPROVED
+                 app.completed_at = None
+             await db.commit()
+        if document.document_type == Documents_type.attestation:# this set the attestation_submitted to true and set the attestation_id to the new document id and set the attestation_submitted_at to the current date and time this is for the front end to know that the attestation is submitted and it can show the download button for the attestation and it can also show the date of submission of the attestation
+             if user.role.value != "admin_dpgr":
+                 raise HTTPException(status_code=403,detail="Not authorized to delete this document")
+             app=await db.get(Application,document.application_id)
+             app.attestation_submitted = False
+             app.attestation_id = None
+             app.attestation_submitted_at = None
+             await db.commit()
+        await db.delete(document)
+        await db.commit()
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+        return  {"details":"Document deleted succussfuly"}
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get('/document/{idd}',response_model=DocumentResponse)
 async def get_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
-   res=await db.execute(select(Document).where(Document.id==idd,Document.user_id==user.id))
-   document=res.scalar_one_or_none()
-   if not document:
-      raise HTTPException(status_code=404,detail='document not found')
-   return document
+    try:
+        res=await db.execute(select(Document).where(Document.id==idd,Document.user_id==user.id))
+        document=res.scalar_one_or_none()
+        if not document:
+            raise HTTPException(status_code=404,detail='document not found')
+        return document
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
 @router.get("/document/{idd}/download")
 async def download_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
-   res=await db.execute(select(Document).where(Document.id==idd,Document.user_id==user.id))
-   document=res.scalar_one_or_none()
-   if not document:
-      raise HTTPException(status_code=404,detail='document not found')
-   if not os.path.exists(document.file_path):
-        raise HTTPException(status_code=404, detail="file missing on server")
-   return FileResponse(path=document.file_path, filename=document.file_name)
+    try:
+        res=await db.execute(select(Document).where(Document.id==idd,Document.user_id==user.id))
+        document=res.scalar_one_or_none()
+        if not document:
+            raise HTTPException(status_code=404,detail='document not found')
+        if not os.path.exists(document.file_path):
+              raise HTTPException(status_code=404, detail="file missing on server")
+        media_type = document.mime_type or "application/octet-stream"
+        return FileResponse(
+            path=document.file_path,
+            filename=document.file_name,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{document.file_name}"'}
+        )
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
@@ -140,41 +215,49 @@ async def downlods_demende_documents(application_id:uuid.UUID,db:AsyncSession=De
         return FileResponse(zip_path, filename=filename)
 
     except HTTPException:
+        await db.rollback()
         raise
     except Exception as e:
-        print(e)
+        await db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
    
 
 @router.get('application/documents')
 async def downlaod_all_user_docs(db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
-   if    user.role.value != "admin_dpgr":
-      raise HTTPException(status_code=401,detail='Unauthaurize')
-   result = await db.execute(select(Document)
-        .options(
+   try:
+     if    user.role.value != "admin_dpgr":
+        raise HTTPException(status_code=401,detail='Unauthaurize')
+     result = await db.execute(select(Document)
+         .options(
             joinedload(Document.application).joinedload(Application.user)
-                    )  )
+                   )  )
 
-   documents = result.scalars().all()
-   if not documents:
-        raise HTTPException(status_code=404, detail="No documents found")
+     documents = result.scalars().all()
+     if not documents:
+         raise HTTPException(status_code=404, detail="No documents found")
 
-   year = datetime.utcnow().year
+     year = datetime.utcnow().year
 
-   z = zipstream.ZipFile(mode="w", compression=zipstream.ZIP_DEFLATED)
+     z = zipstream.ZipFile(mode="w", compression=zipstream.ZIP_DEFLATED)
 
-   for doc in documents:
-        user = doc.application.user
+     for doc in documents:
+         user = doc.application.user
 
-        folder = f"{user.username}_{user.lastname}_{user.id}"
-        arcname = f"{folder}/{doc.file_name}"
+         folder = f"{user.username}_{user.lastname}_{user.id}"
+         arcname = f"{folder}/{doc.file_name}"
 
-        z.write(doc.file_path, arcname)
+         z.write(doc.file_path, arcname)
 
-   return StreamingResponse(
-        z,
-        media_type="application/zip",
-        headers={
+     return StreamingResponse(
+         z,
+         media_type="application/zip",
+         headers={
             "Content-Disposition": f"attachment; filename={year}.zip"
-        }
-    )
+         }
+      )
+   except HTTPException:
+     await db.rollback()
+     raise
+   except Exception as e:
+     await db.rollback()
+     raise HTTPException(status_code=500, detail=str(e))
