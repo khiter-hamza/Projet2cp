@@ -49,7 +49,7 @@ async def upload_document(    application_id: uuid.UUID,    document_type: Docum
     )
     db.add(new_document)
     await db.commit()
-    await db.refresh(new_document)
+
 
     return new_document
 

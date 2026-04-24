@@ -16,10 +16,16 @@ class ApplicationResponse(BaseModel):
     
     start_date: date | None = None
     end_date: date | None = None
-    
+
+    host_institution: str | None = None
+    host_supervisor : str | None = None
+    supervisor_email : str | None = None
+    host_department : str | None = None
+    title_of_stay : str | None = None
+    research_axis : str | None = None
+    expected_outcomes : str | None = None
     destination_country: Countries | None = None
     destination_city: str | None = None
-    host_institution: str | None = None
     
     scientific_objective: str | None = None
     
@@ -68,10 +74,17 @@ class ApplicationUpsert(BaseModel):
     """Pour créer OU modifier un brouillon"""
     start_date: date | None = None
     end_date: date | None = None
+    host_institution: str | None = None
+    host_supervisor : str | None = None
+    supervisor_email : str | None = None
+    host_department : str | None = None
+    title_of_stay : str | None = None
+    research_axis : str | None = None
+    expected_outcomes : str | None = None
+    scientific_objective: str | None = None
+
     destination_country: Countries | None = None
     destination_city: str | None = None
-    host_institution: str | None = Field(None, max_length=255)
-    scientific_objective: str | None = None
     class Config:
         from_attributes = True
 
@@ -83,12 +96,18 @@ class ApplicationSubmission(BaseModel):
     stage_type: StageType 
     start_date: date 
     end_date: date 
+    host_institution: str 
+    host_supervisor : str 
+    supervisor_email : str
+    host_department : str 
+    title_of_stay : str 
+    research_axis : str 
+    expected_outcomes : str 
     destination_country: Countries 
     destination_city: str 
-    host_institution: str 
     scientific_objective: str 
     created_at: datetime
-    submitted_at: datetime | None = None
+    submitted_at: datetime 
     
     class Config:
         from_attributes = True
