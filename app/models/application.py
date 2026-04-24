@@ -18,10 +18,16 @@ class Application(Base):
     start_date = Column(Date, index=True)
     end_date = Column(Date)
     
+    host_supervisor =  Column(String(100))
+    supervisor_email =  Column(String(50))
+    host_department =  Column(String(100))
+    title_of_stay =  Column(String(100))
+    research_axis =  Column(String(50))
     destination_country = Column(Enum(Countries))
     destination_city = Column(String(100))
     host_institution = Column(String(255))
     
+    expected_outcomes = Column(Text)
     scientific_objective = Column(Text)
     
     score = Column(Float)
