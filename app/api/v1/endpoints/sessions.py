@@ -1,16 +1,20 @@
 import uuid
 from datetime import date
 
+from app.models.enums import Status
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
+from app.models.application import Application
 from app.models.session import Session
 from app.models.user import User
 from app.schemas.session import CreateSession, SessionResponse, UpdateSession
-
+from app.services.notification.notification_service import create_notification, notify_admins
+from app.models.enums import NotificationType
 router = APIRouter()
 
 
@@ -26,14 +30,40 @@ async def create_session(
         raise HTTPException(status_code=400, detail="start_date must be before end_date")
     if data.end_date < date.today():
         raise HTTPException(status_code=400, detail="end_date must be in the future")
-    try:    
-        await db.execute(update(Session).values(is_active=False,is_open=False))
-        #applications_to_be_removed 
-        #application_to_be_expired
-        #HAMAIDI IMPLEMENT THIS
-        await db.commit()
+    try:
+        res = await db.execute(
+            select(Session)
+            .options(joinedload(Session.applications).joinedload(Application.user))
+            .where(Session.is_active == True)
+        )
+        result = res.unique().scalar_one_or_none()
+        if result:
+            applications = result.applications
+            # Archive previous active session and expire unfinished applications.
+            for app in applications:
+                if app.status != Status.CANCELLED and app.status != Status.COMPLETED and app.status != Status.CLOSED:
+                    app.status = Status.EXPIRED
+                    await create_notification(
+                 db,
+                 app.user_id,
+                 "Expired Application",
+                 "Your application has been expired due to the session ending.",
+                 NotificationType.status_change,
+                 demande_id=app.id,
+             )
+                    await notify_admins(
+                        db,
+                        "Application Expired",
+                        f"The Application of {app.user.username} {app.user.lastname} has been expired due to the session ending,Application ID: {app.id}.",
+                        NotificationType.status_change,
+                        demande_id=app.id,
+                    )
+            result.is_open = False
+            result.is_active = False
+            await db.commit()
+
     except Exception as e:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail=f"internal server error {str(e)}")
     new_session = Session(
         name=data.name,
@@ -137,16 +167,73 @@ async def delete_session(
     await db.commit()
     return {"detail": "Session deleted"}
 
-@router.patch('/{session_id}') # for douaa
+
+@router.patch('/{session_id}/close')
 async def close_session(session_id: uuid.UUID,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)):
-    if user.role.value != "admin_dpgr":
+    if user.role.value not in ["assistant_dpgr", "admin_dpgr"]:
         raise HTTPException(status_code=403, detail="Not authorized")
-    session = await db.get(Session, session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    session.is_active=False
-    await db.commit()
-    return session
+    res=await db.execute(select(Session).options(
+               joinedload(Session.applications).joinedload(Application.user)).where(Session.is_active == True, Session.id==session_id))
+    result = res.unique().scalar_one_or_none()
+    if result:
+        applications=result.applications
+        #for those who are in draft status we will change their status to submitted because the session is closed and they can't edit their application anymore and they can only see it and they can see the status of their application is submitted and they can see the date of submission of their application which is the date of closing of the session and for those who are in submitted status we will keep their status as submitted because they have already submitted their application and they can see the date of submission of their application which is the date of closing of the session and for those who are in accepted or rejected status we will keep their status as it is because they have already received a decision on their application and they can see the date of decision on their application which is the date of closing of the session
+        for app in applications:
+            if app.status==Status.DRAFT:
+             app.status=Status.SUBMITTED
+             await create_notification(
+                 db,
+                user_id=app.user_id,
+                title="Your application has been submitted",
+                message=f"Your application has been submitted for review.",
+                notification_type=NotificationType.status_change
+            )
+             await notify_admins(
+                db,
+                title="New Application Submitted",
+                message=f"Researcher {app.user.username} {app.user.lastname} has submitted an application ({app.id}).",
+                notification_type=NotificationType.status_change,
+                demande_id=app.id
+            )
+        result.is_open = False
+        await db.commit()
+        return result
+    raise HTTPException(status_code=404, detail="Active session not found")
 
+
+@router.patch('/{session_id}/archive') # for douaa
+async def archive_session(session_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)):
+    if user.role.value not in ["assistant_dpgr", "admin_dpgr"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    res=await db.execute(select(Session).options(
+               joinedload(Session.applications).joinedload(Application.user)).where(Session.is_active == True, Session.id==session_id))
+    result = res.unique().scalar_one_or_none()
+    if result:
+        applications=result.applications
+        #for those who are not closed or completed or canceled we will change their status to expired because the session is archived and they can't do anything with their application anymore and they can only see it and they can see the status of their application is expired and they can see the date of expiration of their application which is the date of archiving of the session and for those who are in closed or completed or canceled status we will keep their status as it is because they have already received a decision on their application and they can see the date of decision on their application which is the date of closing of the session
+        for app in applications:
+            if app.status!=Status.CANCELLED and app.status!=Status.COMPLETED and app.status!=Status.CLOSED:
+             app.status=Status.EXPIRED
+             await create_notification(
+                 db,
+                    user_id=app.user_id,
+                    title="Your application has been expired",
+                    message=f"Your application has been expired due to the session being archived.",
+                    notification_type=NotificationType.status_change
+                )
+             await notify_admins(
+                    db,
+                    title="Application Expired",
+                    message=f"The Application of {app.user.username} {app.user.lastname} has been expired due to the session being archived,Application ID: {app.id}.",
+                    notification_type=NotificationType.status_change,
+                    demande_id=app.id
+                )
+        result.is_open = False
+        result.is_active = False
+        await db.commit()
+        return result
+    raise HTTPException(status_code=404, detail="Active session not found")

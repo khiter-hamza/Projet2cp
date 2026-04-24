@@ -300,6 +300,13 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
             NotificationType.status_change,
             demande_id=application.id,
         )
+        await notify_admins(
+            db,
+            "New Application Submitted",
+            f"Researcher {user.username} {user.lastname} has submitted a new application (ID: {application.id}).",
+            NotificationType.status_change,
+            demande_id=application.id,
+        )
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -320,6 +327,10 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
 
 async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest, db: AsyncSession, user_id: UUID):
     user = await verify_chercheur_role(user_id, db)
+    current_session = await get_active_session(db)
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available")
+    
 
     application = await db.get(Application, app_id)
     if not application:
@@ -373,9 +384,12 @@ async def cancel_application(app_id: UUID, data: ApplicationCancellationRequest,
 async def cancel_application_confirm(app_id: UUID, db: AsyncSession, user_id: UUID):
     """Confirm a cancellation request (CS Admin only)"""
     await verify_cs_admin_role(user_id, db)
+    current_session = await get_active_session(db)
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available")
     
     result = await db.execute(
-        select(Application).options(joinedload(Application.user)).where(Application.id == app_id)
+        select(Application).options(joinedload(Application.user)).where(Application.id == app_id, Application.session_id == current_session.id)
     )
     application = result.scalar_one_or_none()
     
@@ -424,9 +438,13 @@ async def cancel_application_confirm(app_id: UUID, db: AsyncSession, user_id: UU
 
 async def close_application(app_id: UUID, db: AsyncSession, user_id: UUID):
     await verify_cs_admin_role(user_id, db)
+    current_session = await get_active_session(db)
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available")
+    
 
     result = await db.execute(
-        select(Application).options(joinedload(Application.user)).where(Application.id == app_id)
+        select(Application).options(joinedload(Application.user)).where(Application.id == app_id, Application.session_id == current_session.id)
     )
     application = result.scalar_one_or_none()
     if not application:
@@ -458,7 +476,13 @@ async def close_application(app_id: UUID, db: AsyncSession, user_id: UUID):
             NotificationType.status_change,
             demande_id=application.id,
         )
-        await notify_admins(db, "Application Closed", f"Application of {application.username} {application.first_name} has been closed, Application ID: {application.id}", NotificationType.status_change, demande_id=application.id)
+        await notify_admins(
+            db,
+            "Application Closed",
+            f"Application of {application.user.username} {application.user.lastname} has been closed, Application ID: {application.id}",
+            NotificationType.status_change,
+            demande_id=application.id,
+        )
     except Exception as e:
         raise HTTPException(status_code=500,detail=f"Internal server error: {str(e)}")
 
@@ -466,9 +490,14 @@ async def close_application(app_id: UUID, db: AsyncSession, user_id: UUID):
 
 async def flag(app_id: UUID, db: AsyncSession, flagReason:str,user_id: UUID):
     await verify_cs_admin_role(user_id=user_id,db=db)
+    current_session = await get_active_session(db)
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available")
+
     result = await db.execute(
-        select(Application).where(Application.id == app_id)
+        select(Application).where(Application.id == app_id, Application.session_id == current_session.id)
     )
+
     application = result.scalar_one_or_none()
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -530,6 +559,13 @@ async def deleteDraft(app_id: UUID, db: AsyncSession, user_id: UUID):
 async def get_current_session(db: AsyncSession):
     result = await db.execute(
         select(Session).where(Session.is_active == True , Session.is_open == True).where(Session.end_date >= date.today())
+    )
+    session = result.scalar_one_or_none()
+    return session
+
+async def get_active_session(db: AsyncSession):
+    result = await db.execute(
+        select(Session).where(Session.is_active == True)
     )
     session = result.scalar_one_or_none()
     return session

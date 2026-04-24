@@ -1,6 +1,7 @@
 
 from uuid import UUID
 from datetime import datetime
+from app.services.application.application_service import get_active_session
 from app.services.document.document_service import create_attestation
 from sqlalchemy import select, and_, desc ,asc
 from sqlalchemy.orm import joinedload
@@ -30,9 +31,12 @@ async def approve_application(
     
     # Verify CS admin access
     user = await verify_cs_admin_role(user_id, db)
+    current_session = await get_active_session(db)
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available")
     
     application = await db.execute(
-        select(Application).where(Application.id == application_id).options(joinedload(Application.user))
+        select(Application).where(Application.id == application_id, Application.session_id == current_session.id).options(joinedload(Application.user))
     )
     application = application.scalar_one_or_none()
 
@@ -129,6 +133,10 @@ async def reject_application(
     Returns:
         Decision confirmation with new status and reason
     """
+    current_session = await get_active_session(db)
+    if not current_session:
+        raise HTTPException(status_code=400, detail="No active session available")
+
     if not rejection_reason or not rejection_reason.strip():
         raise HTTPException(status_code=400, detail="Rejection reason is required")
     
@@ -136,7 +144,7 @@ async def reject_application(
     user = await verify_cs_admin_role(user_id, db)
     
     application = await db.execute(
-        select(Application).where(Application.id == application_id).options(joinedload(Application.user)))   
+        select(Application).where(Application.id == application_id, Application.session_id == current_session.id).options(joinedload(Application.user)))   
     
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
