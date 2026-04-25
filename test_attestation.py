@@ -112,6 +112,12 @@ async def main():
                 "destination_city": "Paris",
                 "host_institution": "University of Paris",
                 "scientific_objective": "Research on AI and machine learning",
+                "host_supervisor": "Dr. Martin",
+                "supervisor_email": "martin@univ-paris.fr",
+                "host_department": "Computer Science",
+                "title_of_stay": "AI Research Residency",
+                "research_axis": "Artificial Intelligence",
+                "expected_outcomes": "Joint publication and prototype",
             })
         log("Submit application", status == 200, f"eligibility={r.get('eligibility_status') if r else 'N/A'}")
 

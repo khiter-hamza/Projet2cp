@@ -345,6 +345,12 @@ async def main():
             "destination_city": "Lyon",
             "host_institution": "Claude Bernard University",
             "scientific_objective": "Advanced research on distributed systems and AI",
+            "host_supervisor": "Dr. Laurent",
+            "supervisor_email": "laurent@univ-lyon.fr",
+            "host_department": "Computer Science",
+            "title_of_stay": "Distributed AI Study",
+            "research_axis": "Distributed Systems",
+            "expected_outcomes": "Publication and collaboration roadmap",
         })
         report("POST /applications/{id}/submit", status == 200, f"status={status}, err={err}")
         if result:
@@ -506,6 +512,9 @@ async def main():
             await api(client, "post", f"/applications/{app2_id}/submit", token=researcher_token, json_data={
                 "destination_country": "allemagne", "destination_city": "Berlin", "host_institution": "TU Berlin",
                 "scientific_objective": "Robotics research",
+                "host_supervisor": "Dr. Klein", "supervisor_email": "klein@tu-berlin.de",
+                "host_department": "Robotics", "title_of_stay": "Robotics Residency",
+                "research_axis": "Robotics", "expected_outcomes": "Prototype and technical report",
             })
             
             # 4. CS Approve

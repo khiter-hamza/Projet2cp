@@ -6,7 +6,7 @@ from app.core.database import AsyncSessionLocal
 from app.models.password_reset_token import PasswordResetToken
 
 
-def create_token_url(db: AsyncSessionLocal, user_id: uuid.UUID) -> str:
+async def create_token_url(db: AsyncSessionLocal, user_id: uuid.UUID) -> str:
     
     token = secrets.token_urlsafe(16)
     
@@ -20,7 +20,7 @@ def create_token_url(db: AsyncSessionLocal, user_id: uuid.UUID) -> str:
         user_id=user_id
      )
     db.add(db_token)
-    db.commit()
-    db.refresh(db_token)
+    await db.commit()
+    await db.refresh(db_token)
      
     return token

@@ -37,8 +37,8 @@ async def auth_google_callback(request: Request,db:AsyncSessionLocal = Depends(g
 async def forgot_password_endpoint(user: forget_User, background_tasks: BackgroundTasks, db: AsyncSessionLocal = Depends(get_db) ):
     return await forgot_password(user, db, background_tasks)
 @router.post("/reset-password/{token}")
-async def reset_password_endpoint(token:str,new_password: str, db: AsyncSessionLocal = Depends(get_db)):
-    return await reset_password(token, new_password, db)
+async def reset_password_endpoint(token:str,new_password: reset_Password, db: AsyncSessionLocal = Depends(get_db)):
+    return await reset_password(token, new_password.new_password, db)
 @router.get("/reset-password/{token}")
 async def verify_reset_token_endpoint(token: str, db: AsyncSessionLocal = Depends(get_db)):
     return await verify_token_url(token, db)    

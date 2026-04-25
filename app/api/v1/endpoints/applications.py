@@ -9,6 +9,8 @@ from app.schemas.application import *
 from app.services.application.application_service import *
 from app.core.dependencies import get_current_user_id
 
+
+
 router = APIRouter()
 
 @router.get("/current", response_model=ApplicationResponse)
@@ -64,7 +66,7 @@ async def delete_draft_endpoint(app_id: UUID, db: Annotated[AsyncSession, Depend
 
 
 @router.post("/{app_id}/flag")
-async def flag_endpoint(app_id: UUID ,reason:str, db:Annotated[AsyncSession, Depends(get_db)], user_id:Annotated[UUID,Depends(get_current_user_id)]):
+async def flag_endpoint(app_id: UUID ,reason:flag_reason, db:Annotated[AsyncSession, Depends(get_db)], user_id:Annotated[UUID,Depends(get_current_user_id)]):
     return await flag(app_id, db, flagReason=reason, user_id=user_id)
 
 #i need it after

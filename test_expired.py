@@ -137,7 +137,10 @@ async def path1(client, tokens):
     prev = await get_app_status(client, tokens["researcher"], app_id)
     r, s = await api(client, "post", f"/applications/{app_id}/submit", token=tokens["researcher"],
         json_data={"destination_country": "france", "destination_city": "Paris",
-                   "host_institution": "Univ Paris", "scientific_objective": "AI research"})
+                   "host_institution": "Univ Paris", "scientific_objective": "AI research",
+                   "host_supervisor": "Dr. Martin", "supervisor_email": "martin@univ-paris.fr",
+                   "host_department": "Computer Science", "title_of_stay": "AI Research Residency",
+                   "research_axis": "Artificial Intelligence", "expected_outcomes": "Joint publication and prototype"})
     submitted_ok = ok("Submit", s == 200,
         f"eligibility={r.get('eligibility_status') if isinstance(r, dict) else s}")
     if submitted_ok:

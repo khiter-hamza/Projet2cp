@@ -88,6 +88,9 @@ class ApplicationUpsert(BaseModel):
     class Config:
         from_attributes = True
 
+class flag_reason(BaseModel):
+    reason:str   
+
 class ApplicationSubmission(BaseModel):
     """Schema de validation avant soumission"""
     id: UUID
@@ -107,7 +110,7 @@ class ApplicationSubmission(BaseModel):
     destination_city: str 
     scientific_objective: str 
     created_at: datetime
-    submitted_at: datetime 
+    submitted_at: datetime | None = None
     
     class Config:
         from_attributes = True

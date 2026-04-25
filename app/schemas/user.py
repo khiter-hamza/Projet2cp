@@ -33,5 +33,4 @@ class UserLogin(BaseModel) :
 class forget_User(BaseModel):
     email : str    
 class reset_Password(BaseModel):
-    token : str
     new_password : str    
