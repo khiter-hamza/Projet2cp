@@ -9,7 +9,7 @@ from app.models.user import User
 from app.schemas.user import forget_User , reset_Password
 from sqlalchemy.orm import joinedload
 from fastapi_mail import FastMail, MessageSchema
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, HTTPException
 from app.core.env import (
     MAIL_USERNAME,
     MAIL_PASSWORD,
@@ -78,7 +78,7 @@ async def verify_token_url(token:str,db:AsyncSessionLocal):
     result=await db.execute(select(PasswordResetToken).where(PasswordResetToken.token==token))
     db_token=result.scalar_one_or_none()
     if not db_token or db_token.isvalid()==False:
-        raise {"valid": False, "detail": "Invalid or expired token"}
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
     
     return {"valid": True, "detail": "Token is valid"}
     
@@ -86,7 +86,7 @@ async def reset_password(token: str, new_password: str, db: AsyncSessionLocal):
     result=await db.execute(select(PasswordResetToken).options(joinedload(PasswordResetToken.user)).where(PasswordResetToken.token==token))
     db_token=result.scalar_one_or_none()
     if not db_token or db_token.isvalid()==False:
-        raise { "detail": "Invalid or expired token"}
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
     db_token.already_used=True
     db_token.user.hashed_password=hash_password(new_password)
     await db.commit()

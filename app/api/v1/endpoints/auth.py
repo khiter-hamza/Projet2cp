@@ -39,14 +39,14 @@ async def login(
         key='access_token',
         value=auth_data['access_token'],
         httponly=True,
-        samesite='lax',
-        secure=False,
+        samesite='None',
+        secure=True,
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path='/',
     )
     return {
         'message': 'Login successful',
-        'user':auth_data['user']
+        'user': auth_data['user']
     }
 
 

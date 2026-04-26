@@ -1,3 +1,4 @@
+from app.schemas.user import CurrentUserResponse
 from sqlalchemy import select
 from app.schemas.user import CreateUser , UserResponse ,UserLogin
 from app.core.database import AsyncSessionLocal
@@ -47,14 +48,26 @@ async def register_user(user : CreateUser , db : AsyncSessionLocal) -> UserRespo
    
 
 
-async def login_user(user : UserLogin , db : AsyncSession ) :
+async def login_user(user: UserLogin, db: AsyncSession):
     result = await db.execute(select(User).where(User.email == user.email))
     userdb = result.scalar_one_or_none()
+    
     if not userdb:
         raise HTTPException(status_code=400, detail="email doesn't exist")
     
     if not verify_password(user.password, userdb.hashed_password):
         raise HTTPException(status_code=400, detail="incorrect password")
+    
+    user_response = CurrentUserResponse(
+        id=userdb.id,
+        username=userdb.username,
+        lastname=userdb.lastname,
+        email=userdb.email,
+        role=userdb.role,
+        grade=userdb.grade,
+        anciente=userdb.anciente,
+        is_active=userdb.is_active,
+    )
     
     token = create_token({
         "sub": str(userdb.id),
@@ -62,7 +75,8 @@ async def login_user(user : UserLogin , db : AsyncSession ) :
     })
     return {
         "access_token": token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "user": user_response
     }
 
    
@@ -75,12 +89,12 @@ async def login_user(user : UserLogin , db : AsyncSession ) :
    
 
 
-async def google_callbackk(request: Request ,db:AsyncSession ):
+async def google_callbackk(request: Request, db: AsyncSession):
     token = await oauth.google.authorize_access_token(request)
     user_info = await oauth.google.parse_id_token(request, token)
-    if  not user_info["email_verified"]:
-     raise HTTPException(status=401,detail="user not authorized") 
-    result = await db.execute(select(User).where(User.email == user.email))
+    if not user_info["email_verified"]:
+        raise HTTPException(status_code=401, detail="user not authorized")
+    result = await db.execute(select(User).where(User.email == user_info["email"]))
     userdb = result.scalar_one_or_none()
     if not userdb:
         raise HTTPException(status_code=400, detail="email doesn't exist")
