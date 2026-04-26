@@ -11,9 +11,9 @@ class CreateUser(BaseModel):
     password : str
     role : UserRole
     grade : UserGrade
+    is_active : bool = True
     anciente : int
     laboratory_name : str
-    ancientee : int = 0
     
     
 
@@ -25,12 +25,29 @@ class UserResponse(BaseModel):
     email : str
 
     model_config = {"from_attributes": True}
+
+
+class CurrentUserResponse(BaseModel):
+    id: UUID
+    username: str
+    lastname: str
+    email: str
+    role: UserRole
+    grade: UserGrade | None = None
+    anciente: int | None = None
+    is_active: bool
+
+    model_config = {"from_attributes": True}
     
     
 class UserLogin(BaseModel) :
     email :str
     password : str
+
+
 class forget_User(BaseModel):
-    email : str    
+    email: str
+
+
 class reset_Password(BaseModel):
-    new_password : str    
+    new_password: str

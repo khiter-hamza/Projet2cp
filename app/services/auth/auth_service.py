@@ -34,10 +34,10 @@ async def register_user(user : CreateUser , db : AsyncSessionLocal) -> UserRespo
         hashed_password=hashed_pwd,
         username=user.username,
         lastname=user.lastname,
-        role=user.role if hasattr(user, 'role') else None,
-        grade=user.grade if hasattr(user, 'grade') else None,
-        # DB column is 'anciente' — populate it from schema's 'ancientee'
-        anciente=user.ancientee if hasattr(user, 'ancientee') else 0,
+        role=user.role,
+        grade=user.grade,
+        anciente=user.anciente,
+        is_active=user.is_active,
         laboratory_id=lab.id,
     )
     db.add(new_user)
