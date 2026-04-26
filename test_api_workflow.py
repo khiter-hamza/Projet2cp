@@ -161,6 +161,9 @@ async def main():
         })
         if result:
             researcher_token = result.get("access_token")
+        else:
+            print(f"DEBUG: No result for researcher login. Status: {status}, Error: {err}")
+        print(f"DEBUG: researcher_token: {researcher_token}")
         report("POST /auth/login (researcher)", researcher_token is not None, f"status={status}")
 
         # Login assistant
