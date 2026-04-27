@@ -75,7 +75,7 @@ async def create_session(
         budget=data.budget,
         is_active=True,
         is_open=True,
-        created_by=user.id,
+        
     )
     db.add(new_session)
     await db.commit()
