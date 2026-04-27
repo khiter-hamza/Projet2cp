@@ -32,6 +32,8 @@ class SessionResponse(BaseModel):
     budget: float
     is_open: bool
     is_active: bool
+    request_count: int = 0
+    approved_count: int = 0
     created_by: Optional[uuid.UUID] = None
     created_at: datetime
 
