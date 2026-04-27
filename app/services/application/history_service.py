@@ -161,7 +161,18 @@ async def get_application_history_page(
     
     current_user = await verify_cs_admin_or_chercheur(user_id, db)
 
+    """
+   needed only 4 status in history : cancelled , rejected , closed and expired
+    """
+
     query = select(Application).options(selectinload(Application.documents))
+    history_statuses = [
+        Status.CANCELLED,
+        Status.REJECTED,
+        Status.CLOSED,
+        Status.EXPIRED,
+    ]
+    query = query.where(Application.status.in_(history_statuses))
 
     if current_user.role == UserRole.chercheur:
         query = query.where(Application.user_id == user_id)
@@ -207,8 +218,8 @@ async def get_application_history_page(
     current_page = (offset // limit) + 1 if limit > 0 else 1
     total_pages = (total + limit - 1) // limit if limit > 0 else 1
 
-    approved_count = sum(1 for app in applications if app.status == Status.APPROVED)
-    in_progress_count = sum(1 for app in applications if app.status in [Status.SUBMITTED])
+    approved_count = 0
+    in_progress_count = 0
     rejected_count = sum(1 for app in applications if app.status == Status.REJECTED)
     closed_count = sum(1 for app in applications if app.status == Status.CLOSED)
     cancelled_count = sum(1 for app in applications if app.status == Status.CANCELLED)

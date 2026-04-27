@@ -30,6 +30,8 @@ async def create_session(
         raise HTTPException(status_code=400, detail="start_date must be before end_date")
     if data.end_date < date.today():
         raise HTTPException(status_code=400, detail="end_date must be in the future")
+    if data.budget <= 0:
+        raise HTTPException(status_code=400, detail="budget must be greater than zero")
     try:
         res = await db.execute(
             select(Session)
@@ -70,6 +72,7 @@ async def create_session(
         academic_year=data.academic_year,
         start_date=data.start_date,
         end_date=data.end_date,
+        budget=data.budget,
         is_active=True,
         is_open=True,
         created_by=user.id,
