@@ -44,7 +44,7 @@ async def login(
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path='/',
     )
-    return {auth_data['user'] : auth_data['user']}
+    return { "message" : "login suuceful"}
 
 
 @router.post('/logout')
