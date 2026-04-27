@@ -3,7 +3,7 @@ from datetime import date
 
 from app.models.enums import Status
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -90,8 +90,41 @@ async def list_sessions(
 ):
     if user.role.value != "assistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
-    result = await db.execute(select(Session).order_by(Session.created_at.desc()))
-    return result.scalars().all()
+    
+    # Subquery to count all applications per session
+    total_count_stmt = (
+        select(Application.session_id, func.count(Application.id).label("total"))
+        .group_by(Application.session_id)
+    ).subquery()
+
+    # Subquery to count approved/completed/closed applications per session
+    approved_count_stmt = (
+        select(Application.session_id, func.count(Application.id).label("approved"))
+        .where(Application.status.in_([Status.APPROVED, Status.COMPLETED, Status.CLOSED]))
+        .group_by(Application.session_id)
+    ).subquery()
+
+    # Join session with the counts
+    stmt = (
+        select(
+            Session,
+            func.coalesce(total_count_stmt.c.total, 0).label("request_count"),
+            func.coalesce(approved_count_stmt.c.approved, 0).label("approved_count")
+        )
+        .outerjoin(total_count_stmt, Session.id == total_count_stmt.c.session_id)
+        .outerjoin(approved_count_stmt, Session.id == approved_count_stmt.c.session_id)
+        .order_by(Session.created_at.desc())
+    )
+
+    result = await db.execute(stmt)
+    sessions_with_counts = []
+    for row in result.all():
+        session = row[0]
+        session.request_count = row[1]
+        session.approved_count = row[2]
+        sessions_with_counts.append(session)
+    
+    return sessions_with_counts
 
 
 @router.get("/active", response_model=SessionResponse)#for the front end  to get the active session if there is no active session it will return 404 and the front end can handle it by showing a message or something like that//
@@ -113,9 +146,21 @@ async def get_session(
 ):
     if user.role.value != "assistant_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Get session with counts
+    total_count_stmt = select(func.count(Application.id)).where(Application.session_id == session_id)
+    approved_count_stmt = select(func.count(Application.id)).where(
+        Application.session_id == session_id,
+        Application.status.in_([Status.APPROVED, Status.COMPLETED, Status.CLOSED])
+    )
+    
     session = await db.get(Session, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    
+    session.request_count = (await db.execute(total_count_stmt)).scalar() or 0
+    session.approved_count = (await db.execute(approved_count_stmt)).scalar() or 0
+    
     return session
 
 #to be deleted
