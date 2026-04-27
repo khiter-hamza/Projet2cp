@@ -23,6 +23,8 @@ class UserResponse(BaseModel):
     username : str
     lastname : str
     email : str
+    role: UserRole
+    grade: UserGrade | None = None
 
     model_config = {"from_attributes": True}
 

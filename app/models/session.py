@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, Boolean, Date, DateTime, String, ForeignKey
+from sqlalchemy import Column, Boolean, Date, DateTime, String, ForeignKey, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from datetime import datetime, date
@@ -15,6 +15,7 @@ class Session(Base):
     academic_year = Column(String, nullable=False)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
+    budget = Column(Float, default=0, nullable=False)
     is_open = Column(Boolean, default=True, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)

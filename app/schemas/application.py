@@ -9,7 +9,7 @@ class ApplicationResponse(BaseModel):
     """Représentation des champs de la table Application (sans relations)"""
     id: UUID
     user_id: UUID
-    session_id: UUID
+    session_id: UUID | None = None
     
     stage_type: StageType
     status: Status

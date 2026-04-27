@@ -12,6 +12,14 @@ from app.services.application.application_service import get_current_session
 from typing import List
 from uuid import UUID
 
+FUNDED_STATUSES = {
+    Status.APPROVED,
+    Status.COMPLETED,
+    Status.CANCELLATION_REQUEST,
+    Status.CORRECTION_NEEDED,
+    Status.CLOSED,
+}
+
 async def get_researcher_current_application(user_id: str, db: AsyncSession) -> ApplicationResponse | None:
     """Get the current session application details for the researcher."""
     user = await verify_chercheur_role(user_id, db)
@@ -172,8 +180,8 @@ async def get_admin_dashboard(user_id: str, db: AsyncSession, filters: AdminDash
         if app.status == Status.SUBMITTED:
             pending_cs_count += 1
         
-        # Budget tracking (only for approved applications)
-        if app.calculated_fees and app.status == Status.APPROVED:
+        # Budget tracking for applications that reserve or already consumed of session 
+        if app.calculated_fees and app.status in FUNDED_STATUSES:
             total_committed += app.calculated_fees
             beneficiary_set.add(app.user_id)
     
@@ -183,12 +191,12 @@ async def get_admin_dashboard(user_id: str, db: AsyncSession, filters: AdminDash
     for decision, count in decision_dict.items():
         decision_counts.append(CSDecisionCount(decision=decision, count=count))
     
-    # Calculate budget status (default to 8M DA session budget)
+    total_budget = float(target_session.budget or 0)
     budget_status = BudgetStatus(
-        total_budget=8_000_000,
+        total_budget=total_budget,
         committed_amount=total_committed,
-        percentage_used=(total_committed / 8_000_000 * 100) if total_committed > 0 else 0.0,
-        remaining_budget=max(0, 8_000_000 - total_committed),
+        percentage_used=(total_committed / total_budget * 100) if total_budget > 0 else 0.0,
+        remaining_budget=max(0, total_budget - total_committed),
         beneficiary_count=len(beneficiary_set)
     )
     

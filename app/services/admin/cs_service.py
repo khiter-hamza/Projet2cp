@@ -3,7 +3,7 @@ from uuid import UUID
 from datetime import datetime
 from app.services.application.application_service import get_active_session
 from app.services.document.document_service import create_attestation
-from sqlalchemy import select, and_, desc ,asc
+from sqlalchemy import select, and_, desc, asc, func
 from sqlalchemy.orm import joinedload
 from fastapi import HTTPException
 
@@ -19,6 +19,42 @@ from app.services.notification.notification_service import create_notification, 
 from app.models.enums import NotificationType
 from app.schemas.application import ApplicationResponse
 
+
+FUNDED_STATUSES = [
+    Status.APPROVED,
+    Status.COMPLETED,
+    Status.CANCELLATION_REQUEST,
+    Status.CORRECTION_NEEDED,
+    Status.CLOSED,
+]
+
+
+async def get_session_committed_budget(session_id: UUID, db: AsyncSession) -> float:
+    result = await db.execute(
+        select(func.coalesce(func.sum(Application.calculated_fees), 0))
+        .where(Application.session_id == session_id)
+        .where(Application.status.in_(FUNDED_STATUSES))
+    )
+    return float(result.scalar() or 0)
+
+
+async def ensure_session_budget_can_accept(application: Application, session: Session, db: AsyncSession) -> None:
+    total_budget = float(session.budget or 0)
+    requested_budget = float(application.calculated_fees or 0)
+    if total_budget <= 0 or requested_budget <= 0:
+        return
+
+    committed_budget = await get_session_committed_budget(session.id, db)
+    remaining_budget = total_budget - committed_budget
+    if requested_budget > remaining_budget:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Session budget is exhausted. "
+                f"Remaining budget is {remaining_budget:.0f} DA, "
+                f"but this application needs {requested_budget:.0f} DA."
+            ),
+        )
 
 
 
@@ -48,24 +84,31 @@ async def approve_application(
             status_code=400,
             detail=f"Can only approve applications in SUBMITTED status. Current status: {application.status}"
         )
+
+    await ensure_session_budget_can_accept(application, current_session, db)
     
     # Update application
     application.cs_decision = CSDecision.approved
     application.status = Status.APPROVED
     application.approved_at = datetime.now()
+    application.action_confirmation_by_id = user_id
     if notes:
         application.rejection_reason = notes  # Store notes here even for approval
     
     try:
         await db.commit()
         await db.refresh(application)
-        
-        #creating an attestation
-        attestation = await create_attestation(db, application.user_id, application)
-        if not attestation:
-            raise HTTPException(status_code=500, detail="Failed to create attestation")
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-        # Calculate and create indemnity if not exists
+    
+    try:
+        await create_attestation(db, application.user_id, application)
+    except Exception:
+        pass
+
+    try:
         existing_indemnity = await db.execute(
             select(Idemnity).where(Idemnity.app_id == application_id)
         )
@@ -73,9 +116,8 @@ async def approve_application(
             # Create indemnity record (fee calculation happens in the endpoint or service)
             # This is just a placeholder for fee calculation logic
             pass
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    except Exception:
+        pass
 
     message = f"Application of {application.user.username} {application.user.lastname} has been approved by the Scientific Council , Aplication_id: {application.id}. Notes: {notes or 'No additional notes.'}"
     try:
@@ -145,6 +187,7 @@ async def reject_application(
     
     application = await db.execute(
         select(Application).where(Application.id == application_id, Application.session_id == current_session.id).options(joinedload(Application.user)))   
+    application = application.scalar_one_or_none()
     
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
@@ -161,6 +204,7 @@ async def reject_application(
     application.rejection_reason = rejection_reason
     application.rejected_at = datetime.now()
     application.closed_at = datetime.now()
+    application.action_confirmation_by_id = user_id
     
     try:
         await db.commit()
