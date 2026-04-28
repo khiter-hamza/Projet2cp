@@ -81,19 +81,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Error logging middleware — must be added FIRST (outermost)
+# Error logging middleware
 app.add_middleware(ErrorLoggingMiddleware)
 
 # Set up CORS
-if settings.CORS_ORIGINS:
-    allowed_origins = [str(origin).rstrip("/") for origin in settings.CORS_ORIGINS]
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=allowed_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+allowed_origins = [str(origin).rstrip("/") for origin in settings.CORS_ORIGINS] if settings.CORS_ORIGINS else ["*"]
+allow_credentials = False if "*" in allowed_origins else True
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=allow_credentials,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Include Routers
 app.include_router(api_router, prefix=settings.API_V1_STR)
