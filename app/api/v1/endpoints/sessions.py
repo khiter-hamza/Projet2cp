@@ -85,7 +85,7 @@ async def list_sessions(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "assistant_dpgr":
+    if user.role.value != "assistant_dpgr" and user.role.value != "admin_dpgr":
         raise HTTPException(status_code=403, detail="Not authorized")
     result = await db.execute(select(Session).order_by(Session.created_at.desc()))
     return result.scalars().all()
