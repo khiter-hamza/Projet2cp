@@ -16,5 +16,9 @@ class PasswordResetToken(Base):
     user = relationship("User", back_populates="password_reset_tokens")
     already_used= Column(Boolean, default=False, nullable=False)
     def isvalid(self):
-     return  (not self.already_used) and (datetime.utcnow() - self.created_at).total_seconds() < self.duration 
+     import datetime as dt
+     now = datetime.utcnow()
+     if self.created_at.tzinfo is not None:
+         now = now.replace(tzinfo=dt.timezone.utc)
+     return  (not self.already_used) and (now - self.created_at).total_seconds() < self.duration 
     
