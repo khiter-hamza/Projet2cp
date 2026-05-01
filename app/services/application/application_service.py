@@ -506,6 +506,7 @@ async def flag(app_id: UUID, db: AsyncSession, flagReason:str,user_id: UUID):
         raise HTTPException(status_code=400, detail="the application report must be submitted before it can be flagged")
     
     application.status = Status.CORRECTION_NEEDED
+    application.motif_report = flagReason
     await db.commit()
     try:
         message = f"Your application Report needs correction. Reason: {flagReason}"
@@ -517,6 +518,7 @@ async def flag(app_id: UUID, db: AsyncSession, flagReason:str,user_id: UUID):
             notification_type=NotificationType.status_change,
             demande_id=app_id
         )
+       
         return ApplicationResponse.model_validate(application)
     except Exception as e: 
         raise HTTPException(status_code=500,detail=f"Internal server error{str(e)}")

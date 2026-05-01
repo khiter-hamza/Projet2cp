@@ -205,6 +205,7 @@ async def reject_application(
     application.rejected_at = datetime.now()
     application.closed_at = datetime.now()
     application.action_confirmation_by_id = user_id
+    application.rejection_reason = rejection_reason
     
     try:
         await db.commit()
