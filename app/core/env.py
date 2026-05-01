@@ -20,9 +20,3 @@ for env_path in ENV_CANDIDATES:
 
 
 # Mail configuration exports
-MAIL_USERNAME = os.getenv("MAIL_USERNAME")
-MAIL_PASSWORD = (os.getenv("MAIL_PASSWORD") or "").replace(" ", "")
-MAIL_FROM = os.getenv("MAIL_FROM") or MAIL_USERNAME
-MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com")
-MAIL_PORT = int(os.getenv("MAIL_PORT", "587"))
-MAIL_USE_TLS = (os.getenv("MAIL_USE_TLS", "false").strip().lower() in {"1", "true", "yes", "on"})

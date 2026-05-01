@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     POSTGRES_PORT: int = 5432
+    MAIL_USERNAME: str 
+    MAIL_PASSWORD : str 
+    MAIL_FROM : str 
+    MAIL_SERVER : str
+    MAIL_PORT  : int
+    MAIL_USE_TLS : bool
+
     
     @property
     def ASYNC_DATABASE_URI(self) -> str:

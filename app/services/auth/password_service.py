@@ -1,3 +1,4 @@
+from app.core.config import settings
 from app.services.auth.token_service import create_token_url
 import logging
 import secrets
@@ -10,14 +11,6 @@ from app.schemas.user import forget_User , reset_Password
 from sqlalchemy.orm import joinedload
 from fastapi_mail import FastMail, MessageSchema
 from fastapi import BackgroundTasks, HTTPException
-from app.core.env import (
-    MAIL_USERNAME,
-    MAIL_PASSWORD,
-    MAIL_FROM,
-    MAIL_SERVER,
-    MAIL_PORT,
-    MAIL_USE_TLS,
-)
 
 
 from app.core.security import hash_password
@@ -29,22 +22,22 @@ logger = logging.getLogger(__name__)
 
 
 def _build_mail_config() -> ConnectionConfig:
-    if not MAIL_USERNAME or not MAIL_PASSWORD or not MAIL_FROM:
+    if not settings.MAIL_USERNAME or not settings.MAIL_PASSWORD or not settings.MAIL_FROM:
         raise ValueError("MAIL_USERNAME, MAIL_PASSWORD and MAIL_FROM must be set")
 
     return ConnectionConfig(
-        MAIL_USERNAME=MAIL_USERNAME,
-        MAIL_PASSWORD=MAIL_PASSWORD,
-        MAIL_FROM=MAIL_FROM,
-        MAIL_SERVER=MAIL_SERVER,
-        MAIL_PORT=MAIL_PORT,
-        MAIL_STARTTLS=not MAIL_USE_TLS,
-        MAIL_SSL_TLS=MAIL_USE_TLS,
+        MAIL_USERNAME=settings.MAIL_USERNAME,
+        MAIL_PASSWORD=settings.MAIL_PASSWORD,
+        MAIL_FROM=settings.MAIL_FROM,
+        MAIL_SERVER=settings.MAIL_SERVER,
+        MAIL_PORT=settings.MAIL_PORT,
+        MAIL_STARTTLS=settings.MAIL_USE_TLS,
+        MAIL_SSL_TLS=not settings.MAIL_USE_TLS,
         USE_CREDENTIALS=True,
     )
 
 def send_reset_email(background_tasks: BackgroundTasks, email: str, token: str):
-    reset_link = f"http://localhost:8000/auth/reset-password/{token}"
+    reset_link = f"http://localhost:3000/reset-password/{token}"
     
 
     message = MessageSchema(
@@ -78,7 +71,7 @@ async def verify_token_url(token:str,db:AsyncSessionLocal):
     result=await db.execute(select(PasswordResetToken).where(PasswordResetToken.token==token))
     db_token=result.scalar_one_or_none()
     if not db_token or db_token.isvalid()==False:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
+       return {"valid": False, "detail": "Token is invalid or expired"}
     
     return {"valid": True, "detail": "Token is valid"}
     
@@ -86,9 +79,9 @@ async def reset_password(token: str, new_password: str, db: AsyncSessionLocal):
     result=await db.execute(select(PasswordResetToken).options(joinedload(PasswordResetToken.user)).where(PasswordResetToken.token==token))
     db_token=result.scalar_one_or_none()
     if not db_token or db_token.isvalid()==False:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
+        return {"valid": False, "detail": "Invalid or expired token"}
     db_token.already_used=True
     db_token.user.hashed_password=hash_password(new_password)
     await db.commit()
-    return{"detail":"Password reset successfulDone"}
+    return{ "valid": True, "detail": "Password reset successful"}
     
