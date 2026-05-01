@@ -1,9 +1,10 @@
 import uuid
-
+import urllib.parse
 from fastapi import APIRouter, Depends, HTTPException, Response, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
+from starlette.responses import RedirectResponse
 
 from app.core.database import AsyncSessionLocal, get_db
 from app.core.oauth import oauth
@@ -17,6 +18,7 @@ from app.schemas.user import (
     forget_User,
     reset_Password,
 )
+from app.core.config import settings
 from app.services.auth.auth_service import google_callbackk, login_user, register_user
 from app.services.auth.password_service import forgot_password, reset_password, verify_token_url
 
@@ -44,11 +46,7 @@ async def login(
         max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         path='/',
     )
-    return {
-        'message': 'Login successful',
-        'access_token': auth_data['access_token'],
-        'user': auth_data['user']
-    }
+    return { "message" : "login suuceful"}
 
 
 @router.post('/logout')
@@ -77,7 +75,30 @@ async def login_google(request: Request):
 
 @router.get('/google/callback', name='google_callback')
 async def auth_google_callback(request: Request, db: AsyncSessionLocal = Depends(get_db)):
-    return await google_callbackk(request, db)
+    frontend_url = str(settings.CORS_ORIGINS[0]).rstrip("/") if settings.CORS_ORIGINS else "http://localhost:3000"
+    try:
+        auth_data = await google_callbackk(request, db)
+        redirect = RedirectResponse(url=f"{frontend_url}/")
+        redirect.set_cookie(
+            key='access_token',
+            value=auth_data['access_token'],
+            httponly=True,
+            samesite='lax',
+            secure=False,
+            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            path='/',
+        )
+        return redirect
+    except HTTPException as e:
+        error_msg = urllib.parse.quote(str(e.detail))
+        return RedirectResponse(url=f"{frontend_url}/login?error={error_msg}")
+    except Exception as e:
+        # For security, you might want to log the specific error but show a generic one to the user
+        error_msg = urllib.parse.quote(str(e))
+        return RedirectResponse(url=f"{frontend_url}/login?error={error_msg}")
+
+
+
 
 
 @router.post('/forget-password')

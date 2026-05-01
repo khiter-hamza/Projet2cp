@@ -5,17 +5,17 @@ from app.core.database import AsyncSessionLocal
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.models.laboratory import Laboratory
-from app.core.security import hash_password , decode_token , create_token , verify_password
+from app.core.security import hash_password , decode_token , create_token , verify_password, ACCESS_TOKEN_EXPIRE_MINUTES
 from uuid import UUID
 from typing import Annotated
 from fastapi import HTTPException , Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from starlette.responses import RedirectResponse
 from fastapi import Request
-
-
+from app.core.config import settings
 
 security = HTTPBearer()
+
 async def register_user(user : CreateUser , db : AsyncSessionLocal) -> UserResponse :
     result = await db.execute(select(User).where(User.email == user.email))
     existing_user = result.scalar_one_or_none()
@@ -75,29 +75,55 @@ async def login_user(user: UserLogin, db: AsyncSession):
     })
     return {
         "access_token": token,
-        "token_type": "bearer",
-        "user": user_response
+        "token_type": "bearer" ,
+        "user" : userdb
+     
     }
 
+  
+from app.core.oauth import oauth
    
-
-
-
-
-
-
-   
-
 
 async def google_callbackk(request: Request, db: AsyncSession):
     token = await oauth.google.authorize_access_token(request)
-    user_info = await oauth.google.parse_id_token(request, token)
-    if not user_info["email_verified"]:
-        raise HTTPException(status_code=401, detail="user not authorized")
+    
+    user_info = token.get('userinfo')
+    if not user_info:
+        user_info = await oauth.google.userinfo(token=token)
+        
+    if not user_info or not user_info.get("email_verified"):
+        raise HTTPException(status_code=401, detail="user not authorized or email not verified")
+        
     result = await db.execute(select(User).where(User.email == user_info["email"]))
     userdb = result.scalar_one_or_none()
     if not userdb:
         raise HTTPException(status_code=400, detail="email doesn't exist")
+      
+    user_response = CurrentUserResponse(
+        id=userdb.id,
+        username=userdb.username,
+        lastname=userdb.lastname,
+        email=userdb.email,
+        role=userdb.role,
+        grade=userdb.grade,
+        anciente=userdb.anciente,
+        is_active=userdb.is_active,
+    )
+    
+    token = create_token({
+        "sub": str(userdb.id),
+        "role": userdb.role
+    })
+    frontend_url = str(settings.CORS_ORIGINS[0]).rstrip("/") if settings.CORS_ORIGINS else "http://localhost:3000"
+    
+    response = RedirectResponse(url=f"{frontend_url}/")
+    
+    return {
+        "access_token": token,
+        "token_type": "bearer" ,
+        "user" : userdb
+     
+    }
     
      
 

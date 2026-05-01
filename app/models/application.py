@@ -36,7 +36,7 @@ class Application(Base):
     verification_errors = Column(Text, nullable=True)  # Comma-separated list of errors
     
     cs_decision = Column(Enum(CSDecision), nullable=True, index=True)
-    rejection_reason = Column(Text)
+    rejection_reason = Column(Text, nullable=True)
     #this for report and attestation,it just help the front end and it change during api call or at the generation of the attestation in the cs decision
     stage_report_id=Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
     stage_report_submitted = Column(Boolean, default=False, nullable=False)
@@ -45,7 +45,8 @@ class Application(Base):
     attestation_submitted = Column(Boolean, default=False, nullable=False)
     attestation_submitted_at = Column(DateTime, nullable=True)
     #
-
+    motif_report=Column(Text,nullable=True)
+    
     calculated_fees = Column(Float)
     session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True)
     
