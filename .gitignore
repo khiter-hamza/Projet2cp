@@ -13,3 +13,7 @@ Attestation1.docx
 pdf/
 generated/
 uploads/
+
+# Node
+node_modules/
+*.next/

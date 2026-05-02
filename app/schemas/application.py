@@ -24,7 +24,7 @@ class ApplicationResponse(BaseModel):
     title_of_stay : str | None = None
     research_axis : str | None = None
     expected_outcomes : str | None = None
-    destination_country: Countries | None = None
+    destination_country: str | None = None
     destination_city: str | None = None
     
     scientific_objective: str | None = None
@@ -83,7 +83,7 @@ class ApplicationUpsert(BaseModel):
     expected_outcomes : str | None = None
     scientific_objective: str | None = None
 
-    destination_country: Countries | None = None
+    destination_country: str | None = None
     destination_city: str | None = None
     class Config:
         from_attributes = True
@@ -106,7 +106,7 @@ class ApplicationSubmission(BaseModel):
     title_of_stay : str 
     research_axis : str 
     expected_outcomes : str 
-    destination_country: Countries 
+    destination_country: str 
     destination_city: str 
     scientific_objective: str 
     created_at: datetime
@@ -133,7 +133,7 @@ class ApplicationFilterParams(BaseModel):
     user_id: UUID | None = None
     session_id: UUID | None = None
     stage_type: StageType | None = None
-    destination_country: Countries | None = None
+    destination_country: str | None = None
     user_grade: UserGrade | None = None
     cs_decision: CSDecision | None = None
     
@@ -164,7 +164,7 @@ def get_filter_params(
     user_id: UUID | None = Query(None),
     session_id: UUID | None = Query(None),
     stage_type: StageType | None = Query(None),
-    destination_country: Countries | None = Query(None),
+    destination_country: str | None = Query(None),
     user_grade: UserGrade | None = Query(None),
     cs_decision: CSDecision | None = Query(None),
     min_score: float | None = Query(None),

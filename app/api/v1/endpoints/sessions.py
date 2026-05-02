@@ -18,6 +18,10 @@ from app.models.enums import NotificationType
 router = APIRouter()
 
 
+def can_view_sessions(user: User) -> bool:
+    return user.role.value in ["assistant_dpgr", "admin_dpgr", "super_admin"]
+
+
 @router.post("/", response_model=SessionResponse)
 async def create_session(
     data: CreateSession,
@@ -144,7 +148,7 @@ async def get_session(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if user.role.value != "assistant_dpgr":
+    if not can_view_sessions(user):
         raise HTTPException(status_code=403, detail="Not authorized")
     
     # Get session with counts
