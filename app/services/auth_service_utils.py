@@ -121,7 +121,7 @@ async def verify_cs_admin_or_chercheur(user_id: UUID, db: AsyncSession) -> User:
     """
     user = await verify_user_exists(user_id, db)
     
-    allowed_roles = [UserRole.chercheur, UserRole.admin_dpgr, UserRole.assistant_dpgr]
+    allowed_roles = [UserRole.chercheur, UserRole.admin_dpgr, UserRole.assistant_dpgr, UserRole.super_admin]
     if user.role not in allowed_roles:
         raise HTTPException(
             status_code=403,
