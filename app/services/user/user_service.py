@@ -1,6 +1,6 @@
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from app.schemas.user import CreateUser, UserResponse
+from app.schemas.user import CreateUser, UpdateUser, UserResponse
 from app.core.database import AsyncSessionLocal
 from app.models.user import User
 from app.models.laboratory import Laboratory
@@ -9,6 +9,11 @@ from uuid import UUID
 
 
 async def create_user(user: CreateUser, db: AsyncSessionLocal) -> UserResponse:
+    # Check if email is already used
+    existing_user_result = await db.execute(select(User).where(User.email == user.email))
+    if existing_user_result.scalar_one_or_none():
+        raise ValueError("Email already registered")
+
     hashed_pwd = hash_password(user.password)
 
     # Resolve laboratory: find by name or create it
@@ -29,6 +34,7 @@ async def create_user(user: CreateUser, db: AsyncSessionLocal) -> UserResponse:
         grade=user.grade,
         is_active=user.is_active,
         anciente=user.anciente,
+        phone_number=user.phone_number,
         laboratory_id=lab.id,
     )
 
@@ -55,7 +61,7 @@ async def get_user(db: AsyncSessionLocal, user_id: str):
     return user
 
 
-async def update_user(new_user: CreateUser, user_id: UUID, db: AsyncSessionLocal) -> UserResponse:
+async def update_user(new_user: UpdateUser, user_id: UUID, db: AsyncSessionLocal) -> UserResponse:
     """
     Update user fields - only updates non-null fields from new_user.
     Preserves existing values for fields that are None in new_user.
