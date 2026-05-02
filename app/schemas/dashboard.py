@@ -3,7 +3,7 @@ from typing import List, Dict, Optional
 from uuid import UUID
 from datetime import datetime, date
 from app.schemas.application import ApplicationResponse
-from app.models.enums import Status, CSDecision, StageType, Countries, UserGrade
+from app.models.enums import Status, CSDecision, StageType, UserGrade
 from fastapi import Query
 
 class StatusCount(BaseModel):
@@ -32,7 +32,7 @@ class AdminDashboardFilters(BaseModel):
     status: Optional[Status] = None
     cs_decision: Optional[CSDecision] = None
     stage_type: Optional[StageType] = None
-    destination_country: Optional[Countries] = None
+    destination_country: Optional[str] = None
     zone_id: Optional[str] = None
     user_grade: Optional[UserGrade] = None
     is_eligible: Optional[bool] = None
@@ -47,7 +47,7 @@ def get_admin_dashboard_filters(
     status: Optional[Status] = Query(None),
     cs_decision: Optional[CSDecision] = Query(None),
     stage_type: Optional[StageType] = Query(None),
-    destination_country: Optional[Countries] = Query(None),
+    destination_country: Optional[str] = Query(None),
     zone_id: str | None = Query(None),
     user_grade: Optional[UserGrade] = Query(None),
     is_eligible: Optional[bool] = Query(None),

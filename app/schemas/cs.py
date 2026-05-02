@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import datetime, date
 from typing import Optional, List
-from app.models.enums import CSDecision, Status, StageType, UserGrade, Countries
+from app.models.enums import CSDecision, Status, StageType, UserGrade
 
 
 # ============================================================================
@@ -52,7 +52,7 @@ class CSDashboardApplication(BaseModel):
     user_name: str = Field(..., description="Full name of applicant (username + lastname)")
     user_grade: UserGrade | None = Field(None, description="User's academic grade")
     stage_type: StageType | None = Field(None, description="Type of stage/séjour")
-    destination_country: Countries | None = Field(None, description="Destination country")
+    destination_country: str | None = Field(None, description="Destination country")
     host_institution: str | None = Field(None, description="Host institution name")
     start_date: date | None = Field(None, description="Stage/séjour start date")
     end_date: date | None = Field(None, description="Stage/séjour end date")
