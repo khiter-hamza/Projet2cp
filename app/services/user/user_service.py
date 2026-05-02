@@ -1,4 +1,5 @@
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from app.schemas.user import CreateUser, UserResponse
 from app.core.database import AsyncSessionLocal
 from app.models.user import User
@@ -31,14 +32,16 @@ async def create_user(user: CreateUser, db: AsyncSessionLocal) -> UserResponse:
         laboratory_id=lab.id,
     )
 
+    new_user.laboratory = lab
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
+    new_user.laboratory = lab # ensure it's not expired by refresh
     return UserResponse.model_validate(new_user)
 
 
 async def get_users(db: AsyncSessionLocal) -> list[UserResponse]:
-    result = await db.execute(select(User))
+    result = await db.execute(select(User).options(selectinload(User.laboratory)))
     users = result.scalars().all()
     return [UserResponse.model_validate(u) for u in users]
 
@@ -47,7 +50,7 @@ async def get_user(db: AsyncSessionLocal, user_id: str):
     from uuid import UUID as _UUID
 
     uid = _UUID(user_id) if isinstance(user_id, str) else user_id
-    result = await db.execute(select(User).where(User.id == uid))
+    result = await db.execute(select(User).where(User.id == uid).options(selectinload(User.laboratory)))
     user = result.scalar_one_or_none()
     return user
 
@@ -57,7 +60,7 @@ async def update_user(new_user: CreateUser, user_id: UUID, db: AsyncSessionLocal
     Update user fields - only updates non-null fields from new_user.
     Preserves existing values for fields that are None in new_user.
     """
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == user_id).options(selectinload(User.laboratory)))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -81,6 +84,7 @@ async def update_user(new_user: CreateUser, user_id: UUID, db: AsyncSessionLocal
                     db.add(lab)
                     await db.flush()
                 setattr(user, 'laboratory_id', lab.id)
+                user.laboratory = lab # explicitly set to avoid lazy load after refresh
             else:
                 setattr(user, field, value)
 

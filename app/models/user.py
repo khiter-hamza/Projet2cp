@@ -1,4 +1,5 @@
-from sqlalchemy import Column , Integer , String , Enum , ForeignKey , Boolean
+from sqlalchemy import Column , Integer , String , Enum , ForeignKey , Boolean, DateTime
+from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from uuid import uuid4
@@ -19,6 +20,8 @@ class User(Base):
     # keep the column name that exists in the DB ('anciente')
     anciente = Column(Integer , default = 0)
     is_active = Column(Boolean , default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    phone_number = Column(String, nullable=True)
     laboratory_id = Column(UUID(as_uuid=True) , ForeignKey("laboratories.id"), nullable=False)
     
     laboratory = relationship("Laboratory", back_populates="users")

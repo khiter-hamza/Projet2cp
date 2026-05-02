@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from uuid import UUID
+from datetime import datetime
 from app.models.enums import UserRole, UserGrade
 
 
@@ -14,9 +15,16 @@ class CreateUser(BaseModel):
     is_active : bool = True
     anciente : int
     laboratory_name : str
+    phone_number : str | None = None
     
     
 
+
+class LaboratoryMinimal(BaseModel):
+    id: UUID
+    name: str
+
+    model_config = {"from_attributes": True}
 
 class UserResponse(BaseModel):
     id : UUID
@@ -25,6 +33,10 @@ class UserResponse(BaseModel):
     email : str
     role: UserRole
     grade: UserGrade | None = None
+    is_active: bool
+    created_at: datetime
+    phone_number: str | None = None
+    laboratory: LaboratoryMinimal | None = None
 
     model_config = {"from_attributes": True}
 
