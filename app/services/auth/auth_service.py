@@ -58,6 +58,9 @@ async def login_user(user: UserLogin, db: AsyncSession):
     if not verify_password(user.password, userdb.hashed_password):
         raise HTTPException(status_code=400, detail="incorrect password")
     
+    if not userdb.is_active:
+        raise HTTPException(status_code=403, detail="your count is not active")
+    
     user_response = CurrentUserResponse(
         id=userdb.id,
         username=userdb.username,
@@ -98,6 +101,9 @@ async def google_callbackk(request: Request, db: AsyncSession):
     userdb = result.scalar_one_or_none()
     if not userdb:
         raise HTTPException(status_code=400, detail="email doesn't exist")
+      
+    if not userdb.is_active:
+        raise HTTPException(status_code=403, detail="your count is not active")
       
     user_response = CurrentUserResponse(
         id=userdb.id,

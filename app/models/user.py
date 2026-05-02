@@ -22,7 +22,7 @@ class User(Base):
     is_active = Column(Boolean , default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     phone_number = Column(String, nullable=True)
-    laboratory_id = Column(UUID(as_uuid=True) , ForeignKey("laboratories.id"), nullable=False)
+    laboratory_id = Column(UUID(as_uuid=True) , ForeignKey("laboratories.id"), nullable=True)
     
     laboratory = relationship("Laboratory", back_populates="users")
     notifications = relationship("Notification", back_populates="user")

@@ -15,15 +15,19 @@ async def create_user(user: CreateUser, db: AsyncSessionLocal) -> UserResponse:
         raise ValueError("Email already registered")
 
     hashed_pwd = hash_password(user.password)
-
-    # Resolve laboratory: find by name or create it
-    result = await db.execute(select(Laboratory).where(Laboratory.name == user.laboratory_name))
-    lab = result.scalar_one_or_none()
-    if not lab:
-        lab = Laboratory(name=user.laboratory_name)
-        db.add(lab)
-        # flush to populate lab.id without committing
-        await db.flush()
+    lab_id = None
+    lab = None
+    # Resolve laboratory if a valid name is provided
+    lab_name = user.laboratory_name.strip() if user.laboratory_name else None
+    
+    if lab_name and lab_name != "" and lab_name.lower() != "none":
+        result = await db.execute(select(Laboratory).where(Laboratory.name == lab_name))
+        lab = result.scalar_one_or_none()
+        if not lab: #create the laboratory if it doesn't exist to prevent crush
+            lab = Laboratory(name=lab_name)
+            db.add(lab)
+            await db.flush() 
+        lab_id = lab.id
 
     new_user = User(
         email=user.email,
@@ -35,14 +39,15 @@ async def create_user(user: CreateUser, db: AsyncSessionLocal) -> UserResponse:
         is_active=user.is_active,
         anciente=user.anciente,
         phone_number=user.phone_number,
-        laboratory_id=lab.id,
+        laboratory_id=lab_id,
     )
+    
+    if lab:
+        new_user.laboratory = lab
 
-    new_user.laboratory = lab
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
-    new_user.laboratory = lab # ensure it's not expired by refresh
     return UserResponse.model_validate(new_user)
 
 
@@ -83,14 +88,18 @@ async def update_user(new_user: UpdateUser, user_id: UUID, db: AsyncSessionLocal
                 value = hash_password(value)
                 setattr(user, 'hashed_password', value)
             elif field == 'laboratory_name':
-                lab_result = await db.execute(select(Laboratory).where(Laboratory.name == value))
-                lab = lab_result.scalar_one_or_none()
-                if not lab:
-                    lab = Laboratory(name=value)
-                    db.add(lab)
-                    await db.flush()
-                setattr(user, 'laboratory_id', lab.id)
-                user.laboratory = lab # explicitly set to avoid lazy load after refresh
+                if value in [None, "", "None", "N/A"]:
+                    setattr(user, 'laboratory_id', None)
+                    user.laboratory = None
+                else:
+                    lab_result = await db.execute(select(Laboratory).where(Laboratory.name == value))
+                    lab = lab_result.scalar_one_or_none()
+                    if not lab:
+                        lab = Laboratory(name=value)
+                        db.add(lab)
+                        await db.flush()
+                    setattr(user, 'laboratory_id', lab.id)
+                    user.laboratory = lab # explicitly set to avoid lazy load after refresh
             else:
                 setattr(user, field, value)
 
@@ -102,3 +111,14 @@ async def update_user(new_user: UpdateUser, user_id: UUID, db: AsyncSessionLocal
         raise ValueError(f'Failed to update user: {str(e)}')
 
     return UserResponse.model_validate(user)
+
+
+async def delete_user(user_id: UUID, db: AsyncSessionLocal) -> bool:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise ValueError('User not found')
+    
+    await db.delete(user)
+    await db.commit()
+    return True

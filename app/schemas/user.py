@@ -14,7 +14,7 @@ class CreateUser(BaseModel):
     grade : UserGrade
     is_active : bool = True
     anciente : int
-    laboratory_name : str
+    laboratory_name : str | None = None
     phone_number : str | None = None
     
 class UpdateUser(BaseModel):
