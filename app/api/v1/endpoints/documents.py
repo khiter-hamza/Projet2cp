@@ -1,6 +1,7 @@
 import os
 import uuid
 import datetime
+import tempfile
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
 from sqlalchemy import select
@@ -91,7 +92,18 @@ async def upload_document(    application_id: uuid.UUID,    document_type: Docum
 @router.get('/applications/{application_id}/documents',response_model=list[DocumentResponse])
 async def get_documents(application_id:uuid.UUID,db:AsyncSession=Depends(get_db),user=Depends(get_current_user)):
     try:
-        res = await db.execute(select(Document).where(Document.application_id == application_id, Document.user_id == user.id).order_by(Document.uploaded_at.desc()))
+        application = await db.get(Application, application_id)
+        if not application:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        can_view = (
+            application.user_id == user.id
+            or user.role.value in ["assistant_dpgr", "admin_dpgr"]
+        )
+        if not can_view:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
+        res = await db.execute(select(Document).where(Document.application_id == application_id).order_by(Document.uploaded_at.desc()))
         documents = res.scalars().all()
         if not documents:
             raise HTTPException(status_code=404, detail='No document found with this demmende_id')
@@ -165,10 +177,20 @@ async def get_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:User=D
 @router.get("/document/{idd}/download")
 async def download_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
     try:
-        res=await db.execute(select(Document).where(Document.id==idd,Document.user_id==user.id))
+        res=await db.execute(
+            select(Document)
+            .options(joinedload(Document.application))
+            .where(Document.id==idd)
+        )
         document=res.scalar_one_or_none()
         if not document:
             raise HTTPException(status_code=404,detail='document not found')
+        can_download = (
+            document.user_id == user.id
+            or user.role.value in ["assistant_dpgr", "admin_dpgr"]
+        )
+        if not can_download:
+            raise HTTPException(status_code=403, detail="Not authorized")
         if not os.path.exists(document.file_path):
               raise HTTPException(status_code=404, detail="file missing on server")
         media_type = document.mime_type or "application/octet-stream"
@@ -191,12 +213,27 @@ async def download_document(idd:uuid.UUID,db:AsyncSession=Depends(get_db),user:U
 @router.get('/applications/{application_id}/documents/downloads')
 async def downlods_demende_documents(application_id:uuid.UUID,db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
     try:
+        application_result = await db.execute(
+            select(Application)
+            .options(joinedload(Application.user))
+            .where(Application.id == application_id)
+        )
+        application = application_result.scalars().first()
+        if not application:
+            raise HTTPException(status_code=404, detail="Application not found")
+
+        can_download = (
+            application.user_id == user.id
+            or user.role.value in ["assistant_dpgr", "admin_dpgr"]
+        )
+        if not can_download:
+            raise HTTPException(status_code=403, detail="Not authorized")
+
         res = await db.execute(
             select(Document).options(
                 joinedload(Document.application).joinedload(Application.user)
             ).where(
-                Document.application_id == application_id,
-                Document.user_id == user.id
+                Document.application_id == application_id
             ).order_by(Document.uploaded_at.desc())
         )
         documents = res.scalars().all()
@@ -204,14 +241,14 @@ async def downlods_demende_documents(application_id:uuid.UUID,db:AsyncSession=De
         if not documents:
             raise HTTPException(status_code=404, detail='No document found with this demmende_id')
 
-        zip_path = f"/tmp/{application_id}_{uuid.uuid4()}.zip"
+        zip_path = os.path.join(tempfile.gettempdir(), f"{application_id}_{uuid.uuid4()}.zip")
         with zipfile.ZipFile(zip_path, "w") as zipf:
             for doc in documents:
                 if os.path.exists(doc.file_path):
                     zipf.write(doc.file_path, arcname=doc.file_name)
 
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-        filename = f"documents_{user.username}_{user.lastname}_{timestamp}.zip"
+        filename = f"documents_{application.user.username}_{application.user.lastname}_{timestamp}.zip"
         return FileResponse(zip_path, filename=filename)
 
     except HTTPException:

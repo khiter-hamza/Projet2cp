@@ -23,7 +23,7 @@ class Application(Base):
     host_department =  Column(String(100))
     title_of_stay =  Column(String(100))
     research_axis =  Column(String(50))
-    destination_country = Column(Enum(Countries))
+    destination_country = Column(String(100))
     destination_city = Column(String(100))
     host_institution = Column(String(255))
     
