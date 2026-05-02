@@ -17,8 +17,17 @@ class CreateUser(BaseModel):
     laboratory_name : str
     phone_number : str | None = None
     
-    
-
+class UpdateUser(BaseModel):
+    username : str | None = None
+    lastname : str | None = None
+    email : str | None = None
+    password : str | None = None
+    role : UserRole | None = None
+    grade : UserGrade | None = None
+    is_active : bool | None = None
+    anciente : int | None = None
+    laboratory_name : str | None = None
+    phone_number : str | None = None
 
 class LaboratoryMinimal(BaseModel):
     id: UUID
