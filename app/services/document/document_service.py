@@ -46,7 +46,7 @@ async def  create_attestation(db:AsyncSessionLocal,user_id:uuid.UUID,application
  doc.render(data) #render the daynamic data in the template
  save_dir = f"generated/attestations/{application.id}" #create a directory for the application if it doesn't exist
  os.makedirs(save_dir, exist_ok=True)
- filename = f"attestation_{uuid.uuid4()}.docx"
+ filename = f"attestation_{user.username}_{user.lastname}.docx"
  output_path = os.path.join(save_dir, filename)
  doc.save(output_path)
  file_size = os.path.getsize(output_path)

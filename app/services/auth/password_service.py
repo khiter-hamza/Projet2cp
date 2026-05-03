@@ -25,6 +25,7 @@ def _build_mail_config() -> ConnectionConfig:
     if not settings.MAIL_USERNAME or not settings.MAIL_PASSWORD or not settings.MAIL_FROM:
         raise ValueError("MAIL_USERNAME, MAIL_PASSWORD and MAIL_FROM must be set")
 
+    
     return ConnectionConfig(
         MAIL_USERNAME=settings.MAIL_USERNAME,
         MAIL_PASSWORD=settings.MAIL_PASSWORD,
@@ -34,6 +35,8 @@ def _build_mail_config() -> ConnectionConfig:
         MAIL_STARTTLS=settings.MAIL_USE_TLS,
         MAIL_SSL_TLS=not settings.MAIL_USE_TLS,
         USE_CREDENTIALS=True,
+        MAIL_FROM_NAME=settings.PROJECT_NAME,
+        VALIDATE_CERTS=True
     )
 
 def send_reset_email(background_tasks: BackgroundTasks, email: str, token: str):

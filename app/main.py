@@ -71,6 +71,7 @@ app.add_middleware(
     allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 # SessionMiddleware MUST be added LAST so it is outermost.
