@@ -2,7 +2,7 @@ import os
 import uuid
 import datetime
 import tempfile
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,13 +55,14 @@ async def upload_document(    application_id: uuid.UUID,    document_type: Docum
         save_dir = os.path.join(UPLOAD_DIR, str(application_id))
         os.makedirs(save_dir, exist_ok=True)
         file_path = os.path.join(save_dir, unique_name)
+        file_name= f"{document_type.value}_of_{user.username}_{user.lastname}{ext}"
         with open(file_path, "wb") as f:
             f.write(contents)
         new_document = Document(
             application_id=application_id,
             document_type=document_type,
             file_path=file_path,
-            file_name=file.filename,
+            file_name=file_name,
             file_size=len(contents),
             mime_type=file.content_type,
             user_id=user.id
@@ -260,14 +261,26 @@ async def downlods_demende_documents(application_id:uuid.UUID,db:AsyncSession=De
    
 
 @router.get('/application/documents')
-async def downlaod_all_user_docs(db:AsyncSession=Depends(get_db),user:User=Depends(get_current_user)):
+async def downlaod_all_user_docs(
+    session_id: uuid.UUID | None = Query(None),
+    db:AsyncSession=Depends(get_db),
+    user:User=Depends(get_current_user)
+):
    try:
-     if    user.role.value != "admin_dpgr":
-        raise HTTPException(status_code=401,detail='Unauthaurize')
-     result = await db.execute(select(Document)
-         .options(
-            joinedload(Document.application).joinedload(Application.user)
-                   )  )
+     if user.role.value not in ["admin_dpgr", "assistant_dpgr", "super_admin"]:
+        raise HTTPException(status_code=403, detail='Unauthorized')
+     
+     query = select(Document).options(
+        joinedload(Document.application).options(
+            joinedload(Application.user),
+            joinedload(Application.session)
+        )
+     )
+     
+     if session_id:
+         query = query.join(Document.application).where(Application.session_id == session_id)
+
+     result = await db.execute(query)
 
      documents = result.scalars().all()
      if not documents:
@@ -279,17 +292,19 @@ async def downlaod_all_user_docs(db:AsyncSession=Depends(get_db),user:User=Depen
 
      for doc in documents:
          user = doc.application.user
+         session=doc.application.session
 
-         folder = f"{user.username}_{user.lastname}_{user.id}"
+         folder = f"{user.username}_{user.lastname}"
          arcname = f"{folder}/{doc.file_name}"
 
-         z.write(doc.file_path, arcname)
+         if os.path.exists(doc.file_path):
+             z.write(doc.file_path, arcname)
 
      return StreamingResponse(
          z,
          media_type="application/zip",
          headers={
-            "Content-Disposition": f"attachment; filename={year}.zip"
+            "Content-Disposition": f'attachment; filename="{session.name}.zip" if session_id and session else "all_documents.zip"'
          }
       )
    except HTTPException:
