@@ -33,7 +33,7 @@ async def close_expired_sessions():
                     select(Session).options(joinedload(Session.applications))
                     .where(Session.is_active == True, Session.end_date < date.today())
                 )
-                result = res.scalar_one_or_none()
+                result = res.unique().scalar_one_or_none()
                 if result:
                     applications = result.applications
                     for app in applications:

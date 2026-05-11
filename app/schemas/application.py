@@ -48,6 +48,7 @@ class ApplicationResponse(BaseModel):
     calculated_fees: float | None = None
     
     cancellation_reason: str | None = None
+    motif_report: str | None = None
     action_confirmation_by_id: UUID | None = None
 
     created_at: datetime
