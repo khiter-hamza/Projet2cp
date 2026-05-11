@@ -53,6 +53,7 @@ class CSDecision(str,enum.Enum):
 class Documents_type(str, enum.Enum):
     invitation="invitation"
     passport="passport"
+    visa="visa"
     cv="cv"
     programme="programme"
     accord_labo="accord_labo"

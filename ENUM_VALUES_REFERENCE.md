@@ -81,6 +81,7 @@ Supported document types for uploads:
 
 - `invitation` - Invitation letter
 - `passport` - Passport copy
+- `visa` - Visa / travel document
 - `cv` - Curriculum Vitae
 - `programme` - Research program
 - `accord_labo` - Laboratory agreement
