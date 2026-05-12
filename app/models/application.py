@@ -1,4 +1,4 @@
-from sqlalchemy import Column,  Date, String, Enum, ForeignKey, Text, Boolean, Float, DateTime
+from sqlalchemy import Column, Date, String, Enum, ForeignKey, Text, Boolean, Float, DateTime, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from uuid import uuid4
@@ -31,6 +31,9 @@ class Application(Base):
     scientific_objective = Column(Text)
     
     score = Column(Float)
+    
+    prev_completed_count = Column(Integer, default=0)
+    last_stay_date = Column(Date, nullable=True)
     
     is_eligible = Column(Boolean,nullable=True,index=True)
     verification_errors = Column(Text, nullable=True)  # Comma-separated list of errors

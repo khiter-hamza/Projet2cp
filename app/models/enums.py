@@ -59,3 +59,4 @@ class Documents_type(str, enum.Enum):
     ordre_mission="ordre_mission"
     report="report"
     attestation="attestation"
+    visa="visa"

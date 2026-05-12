@@ -30,6 +30,8 @@ class ApplicationResponse(BaseModel):
     scientific_objective: str | None = None
     
     score: float | None = None
+    prev_completed_count: int | None = 0
+    last_stay_date: date | None = None
     
     is_eligible: bool | None = None
     verification_errors: str | None = None
@@ -85,6 +87,9 @@ class ApplicationUpsert(BaseModel):
 
     destination_country: str | None = None
     destination_city: str | None = None
+    
+    prev_completed_count: int | None = None
+    last_stay_date: date | None = None
     class Config:
         from_attributes = True
 
@@ -109,6 +114,9 @@ class ApplicationSubmission(BaseModel):
     destination_country: str 
     destination_city: str 
     scientific_objective: str 
+    
+    prev_completed_count: int | None = 0
+    last_stay_date: date | None = None
     created_at: datetime
     submitted_at: datetime | None = None
     

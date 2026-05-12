@@ -1,56 +1,77 @@
 """
 Scoring Service - Evaluation Criteria
 
-Based on teacher requirements, scoring is calculated using:
-1. Number of completed applications (higher = better priority)
-2. Total number of all applications (higher = better priority)
-
-This is used to rank applications for CS decision-making.
+Hybrid Scoring Logic:
+1. Counts COMPLETED/CLOSED applications from the system database.
+2. Combines them with manual "External History" fields (optional).
+3. Calculates total score based on Experience and Recency.
 """
 
+from datetime import datetime
 from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.models.user import User
 from app.models.application import Application
 from app.models.enums import Status
-from app.schemas.evaluation import ScoreResponse
 
-
-async def calculate_score(db: AsyncSession, user_id: UUID) -> ScoreResponse:
+async def calculate_score(db: AsyncSession, application: Application) -> float:
     """
-    Calculate application score based on user's history.
-    
-    Criteria (as per teacher requirements):
-    1. Number of completed applications
-    2. Total number of applications
-    
-    Returns: ScoreResponse with score and breakdown
+    Calculate application score based on a mix of manual history and system history.
     """
+    user_id = application.user_id
     
-    # Count total applications for this user (all statuses except DRAFT)
-    total_result = await db.execute(
+    # 1. Fetch System History (COMPLETED or CLOSED applications in DB)
+    result = await db.execute(
         select(func.count(Application.id))
         .where(
             Application.user_id == user_id,
-            Application.status != Status.DRAFT
+            Application.status.in_([Status.COMPLETED, Status.CLOSED]),
+            Application.id != application.id  # Exclude current application
         )
     )
-    total_applications = total_result.scalar() or 0
+    system_completed_count = result.scalar() or 0
     
-    # Count completed applications (COMPLETED or CLOSED status)
-    completed_result = await db.execute(
-        select(func.count(Application.id))
+    # 2. Get most recent date from System History
+    result = await db.execute(
+        select(func.max(Application.end_date))
         .where(
             Application.user_id == user_id,
-            Application.status.in_([Status.COMPLETED, Status.CLOSED])
+            Application.status.in_([Status.COMPLETED, Status.CLOSED]),
+            Application.id != application.id
         )
     )
-    completed_applications = completed_result.scalar() or 0
+    system_last_date = result.scalar()
     
-    # Calculate score
-    # Completed apps weighted more heavily than total apps
-    score = (completed_applications * 10) + (total_applications * 5)
+    # 3. Combine with Manual History
+    manual_completed_count = application.prev_completed_count or 0
+    manual_last_date = application.last_stay_date
     
-    return score
+    total_completed = system_completed_count + manual_completed_count
+    
+    # Determine the most recent date between Manual and System
+    final_last_date = system_last_date
+    if manual_last_date:
+        if not final_last_date or manual_last_date > final_last_date:
+            final_last_date = manual_last_date
+            
+    # 4. Calculate Scores
+    experience_score = total_completed * 10
+    
+    recency_score = 0
+    if final_last_date:
+        # Support both date and datetime types
+        last_date_obj = final_last_date
+        if hasattr(last_date_obj, 'date'):
+            last_date_obj = last_date_obj.date()
+            
+        days_since = (datetime.utcnow().date() - last_date_obj).days
+        years_since = days_since / 365.25
+        
+        if years_since < 1:
+            recency_score = 10
+        elif years_since < 2:
+            recency_score = 5
+        else:
+            recency_score = 2
+            
+    return float(experience_score + recency_score)

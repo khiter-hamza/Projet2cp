@@ -35,16 +35,21 @@ async def upload_document(    application_id: uuid.UUID,    document_type: Docum
         if app.status == Status.CANCELLED:
             raise HTTPException(status_code=400,detail="You can't upload a document for a cancelled application")
         
-        if document_type == Documents_type.report:# this set the stage_report_submitted to true and set the stage_report_id to the new document id and set the stage_report_submitted_at to the current date and time this is for the front end to know that the report is submitted and it can show the download button for the report and it can also show the date of submission of the report
-           if app.status != Status.APPROVED and app.status != Status.CORRECTION_NEEDED:
-               raise HTTPException(status_code=400,detail="You can't submit a report for an application that is not approved")
-           if app.stage_report_submitted:
-               raise HTTPException(status_code=400,detail="You have already submitted a report for this application")
+        if document_type == Documents_type.report:
+           if app.status != Status.APPROVED and app.status != Status.CORRECTION_NEEDED and app.status != Status.COMPLETED:
+               raise HTTPException(status_code=400,detail="You can't submit a report for an application in this status")
       
-        document = await db.execute(select(Document).where(Document.application_id == application_id, Document.document_type == document_type))
-        document_exists = document.scalar_one_or_none()
-        if document_exists :
-            raise HTTPException(status_code=400, detail=f"A document of type {document_type} already exists for this application")
+        document_query = await db.execute(select(Document).where(Document.application_id == application_id, Document.document_type == document_type))
+        existing_document = document_query.scalar_one_or_none()
+        if existing_document:
+            # If it's a report, we'll update the application fields later, so just delete the old doc for now
+            old_file_path = existing_document.file_path
+            await db.delete(existing_document)
+            if old_file_path and os.path.exists(old_file_path):
+                try:
+                    os.remove(old_file_path)
+                except OSError:
+                    pass
         contents = await file.read()
         if len(contents) == 0:
             raise HTTPException(status_code=400, detail="Empty file uploaded")

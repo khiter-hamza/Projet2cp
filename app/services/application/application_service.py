@@ -283,7 +283,7 @@ async def submitDraft(app_id: UUID, data: ApplicationUpsert | None, db: AsyncSes
     application.submitted_at = datetime.today()
     
     try:
-        score = await calculate_score(db,user.id)
+        score = await calculate_score(db, application)
         application.score = score
         
         # Automatically calculate indemnity budget for the submission
