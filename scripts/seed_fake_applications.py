@@ -144,6 +144,16 @@ async def main():
             laboratory_id=laboratory.id,
             anciente=10,
         )
+        super_admin = await get_or_create_user(
+            db,
+            email="dev.superadmin@esi.dz",
+            username="Dev",
+            lastname="SuperAdmin",
+            role=UserRole.super_admin,
+            grade=UserGrade.professeur,
+            laboratory_id=laboratory.id,
+            anciente=15,
+        )
         assistant = await get_or_create_user(
             db,
             email="dev.assistant@esi.dz",
@@ -418,11 +428,13 @@ async def main():
 
         print("Seed complete.")
         print(f"Active session: {DEV_SESSION_NAME} ({session.id})")
+        print("Super Admin login: dev.superadmin@esi.dz / password")
         print("Admin login: dev.admin@esi.dz / password")
         print("Assistant login: dev.assistant@esi.dz / password")
         print("Submitted-app researcher logins: dev.chercheur1@esi.dz, dev.chercheur2@esi.dz, dev.chercheur3@esi.dz / password")
         print("Unique submitted-app users: dev.submitted1@esi.dz through dev.submitted8@esi.dz / password")
         print("Active-stay researcher logins: dev.active1@esi.dz, dev.active2@esi.dz, dev.active3@esi.dz, dev.active4@esi.dz / password")
+        print("Correction-needed researcher login: dev.active4@esi.dz / password")
         print("Created/updated 8 submitted applications, 5 history applications, and 4 active stays.")
 
 
